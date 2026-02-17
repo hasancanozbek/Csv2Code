@@ -24,4 +24,33 @@ public class CsvColumn
     /// Kolon sırası (0-based index).
     /// </summary>
     public int ColumnIndex { get; set; }
+
+    /// <summary>
+    /// Gruplama adı. Aynı grup adına sahip kolonlar birleştirilerek
+    /// tek bir List/Array property oluşturur. Boşsa standalone property olur.
+    /// </summary>
+    public string GroupName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Grup koleksiyon tipi (None, List, Array).
+    /// </summary>
+    public GroupCollectionType CollectionType { get; set; } = GroupCollectionType.None;
+
+    /// <summary>
+    /// Bu kolon standalone mı (gruplama yok)?
+    /// </summary>
+    public bool IsStandalone => string.IsNullOrWhiteSpace(GroupName);
+}
+
+/// <summary>
+/// Grup koleksiyon tipi.
+/// </summary>
+public enum GroupCollectionType
+{
+    /// <summary>Standalone property — gruplama yok.</summary>
+    None,
+    /// <summary>List&lt;T&gt; olarak grupla.</summary>
+    List,
+    /// <summary>T[] olarak grupla.</summary>
+    Array
 }

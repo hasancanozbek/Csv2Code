@@ -122,7 +122,7 @@
             pnlExportSettings = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 240,
+                Height = 310,
                 BackColor = bgPanel,
                 Padding = new Padding(0, 8, 0, 0)
             };
@@ -222,9 +222,35 @@
             pnlExportPathRow.Controls.Add(txtExportPath);
             pnlExportPathRow.Controls.Add(btnBrowseExport);
 
+            // Group By (satır gruplama) dropdown
+            lblGroupBy = new Label
+            {
+                Text = "Satır Gruplama (Group By):",
+                Dock = DockStyle.Top,
+                Height = 22,
+                ForeColor = textMuted,
+                Font = new Font("Segoe UI", 8.5F),
+                Padding = new Padding(4, 4, 0, 0)
+            };
+
+            cmbGroupBy = new ComboBox
+            {
+                Dock = DockStyle.Top,
+                Height = 28,
+                BackColor = bgInput,
+                ForeColor = textLight,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9.5F),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            cmbGroupBy.Items.Add("(Gruplama Yok)");
+            cmbGroupBy.SelectedIndex = 0;
+
             // Export settings paneline ekle (ters sıra - dock top)
             pnlExportSettings.Controls.Add(pnlExportPathRow);
             pnlExportSettings.Controls.Add(lblExportPath);
+            pnlExportSettings.Controls.Add(cmbGroupBy);
+            pnlExportSettings.Controls.Add(lblGroupBy);
             pnlExportSettings.Controls.Add(txtNamespace);
             pnlExportSettings.Controls.Add(lblNamespace);
             pnlExportSettings.Controls.Add(txtClassName);
@@ -329,7 +355,7 @@
                 Name = "colOriginalName",
                 HeaderText = "Orijinal Ad",
                 ReadOnly = true,
-                FillWeight = 30
+                FillWeight = 20
             };
 
             var colPropertyName = new DataGridViewTextBoxColumn
@@ -337,28 +363,46 @@
                 Name = "colPropertyName",
                 HeaderText = "Property Adı",
                 ReadOnly = false,
-                FillWeight = 30
+                FillWeight = 20
             };
 
             var colCSharpType = new DataGridViewComboBoxColumn
             {
                 Name = "colCSharpType",
                 HeaderText = "C# Tipi",
-                FillWeight = 25,
+                FillWeight = 18,
                 FlatStyle = FlatStyle.Flat,
                 DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton
             };
             colCSharpType.Items.AddRange(Services.CodeGeneratorService.SupportedTypes);
+
+            var colGroupName = new DataGridViewTextBoxColumn
+            {
+                Name = "colGroupName",
+                HeaderText = "Grup Adı",
+                ReadOnly = false,
+                FillWeight = 18
+            };
+
+            var colCollectionType = new DataGridViewComboBoxColumn
+            {
+                Name = "colCollectionType",
+                HeaderText = "Koleksiyon",
+                FillWeight = 14,
+                FlatStyle = FlatStyle.Flat,
+                DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton
+            };
+            colCollectionType.Items.AddRange(Services.CodeGeneratorService.CollectionTypes);
 
             var colSampleValue = new DataGridViewTextBoxColumn
             {
                 Name = "colSampleValue",
                 HeaderText = "Örnek Değer",
                 ReadOnly = true,
-                FillWeight = 15
+                FillWeight = 10
             };
 
-            dgvColumns.Columns.AddRange(colOriginalName, colPropertyName, colCSharpType, colSampleValue);
+            dgvColumns.Columns.AddRange(colOriginalName, colPropertyName, colCSharpType, colGroupName, colCollectionType, colSampleValue);
 
             splitCenter.Panel1.Controls.Add(dgvColumns);
             splitCenter.Panel1.Controls.Add(lblColumnsTitle);
@@ -443,56 +487,78 @@
                 Padding = new Padding(8, 8, 8, 8)
             };
 
+            var tblButtons = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 4,
+                RowCount = 1,
+                BackColor = bgPanel,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            tblButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tblButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tblButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tblButtons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            tblButtons.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
             btnPreview = new Button
             {
-                Text = "🔄  Önizle",
-                Dock = DockStyle.Left,
-                Width = 140,
-                Height = 36,
+                Text = "🔄 Önizle",
+                Dock = DockStyle.Fill,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = accentBlue,
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                Cursor = Cursors.Hand
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 4, 0)
             };
             btnPreview.FlatAppearance.BorderSize = 0;
-
-            btnSave = new Button
-            {
-                Text = "💾  Kaydet",
-                Dock = DockStyle.Right,
-                Width = 140,
-                Height = 36,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = accentGreen,
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-                Cursor = Cursors.Hand
-            };
-            btnSave.FlatAppearance.BorderSize = 0;
 
             btnCopyCode = new Button
             {
                 Text = "📋 Kopyala",
-                Dock = DockStyle.Left,
-                Width = 130,
-                Height = 36,
+                Dock = DockStyle.Fill,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(140, 80, 200),
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
                 Cursor = Cursors.Hand,
-                Margin = new Padding(8, 0, 0, 0)
+                Margin = new Padding(4, 0, 4, 0)
             };
             btnCopyCode.FlatAppearance.BorderSize = 0;
 
-            // Araya spacer
-            var spacer = new Panel { Dock = DockStyle.Left, Width = 8, BackColor = Color.Transparent };
+            btnSave = new Button
+            {
+                Text = "💾 Kaydet",
+                Dock = DockStyle.Fill,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = accentGreen,
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(4, 0, 4, 0)
+            };
+            btnSave.FlatAppearance.BorderSize = 0;
 
-            pnlActionButtons.Controls.Add(btnSave);
-            pnlActionButtons.Controls.Add(btnCopyCode);
-            pnlActionButtons.Controls.Add(spacer);
-            pnlActionButtons.Controls.Add(btnPreview);
+            btnAppendToFile = new Button
+            {
+                Text = "📎 Dosyaya Ekle",
+                Dock = DockStyle.Fill,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(50, 150, 80),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(4, 0, 0, 0)
+            };
+            btnAppendToFile.FlatAppearance.BorderSize = 0;
+
+            tblButtons.Controls.Add(btnPreview, 0, 0);
+            tblButtons.Controls.Add(btnCopyCode, 1, 0);
+            tblButtons.Controls.Add(btnSave, 2, 0);
+            tblButtons.Controls.Add(btnAppendToFile, 3, 0);
+            pnlActionButtons.Controls.Add(tblButtons);
 
             splitMain.Panel2.Controls.Add(rtbCodePreview);
             splitMain.Panel2.Controls.Add(pnlActionButtons);
@@ -567,6 +633,8 @@
         private Panel pnlExportPathRow;
         private TextBox txtExportPath;
         private Button btnBrowseExport;
+        private Label lblGroupBy;
+        private ComboBox cmbGroupBy;
 
         // Orta — Split containers
         private SplitContainer splitMain;
@@ -587,6 +655,7 @@
         private Button btnPreview;
         private Button btnSave;
         private Button btnCopyCode;
+        private Button btnAppendToFile;
 
         // Status Bar
         private StatusStrip statusStrip;

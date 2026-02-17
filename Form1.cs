@@ -24,6 +24,7 @@ namespace Csv2Code
             btnPreview.Click += BtnPreview_Click;
             btnSave.Click += BtnSave_Click;
             btnCopyCode.Click += BtnCopyCode_Click;
+            btnAppendToFile.Click += BtnAppendToFile_Click;
             lstFiles.SelectedIndexChanged += LstFiles_SelectedIndexChanged;
             dgvColumns.CellValueChanged += DgvColumns_CellValueChanged;
             dgvColumns.CurrentCellDirtyStateChanged += DgvColumns_CurrentCellDirtyStateChanged;
@@ -132,6 +133,9 @@ namespace Csv2Code
             // Class adını dosya adından oluştur
             txtClassName.Text = SanitizeClassName(data.FileName);
 
+            // Group By dropdown'unu doldur
+            PopulateGroupByDropdown(data);
+
             // Kolon ayarlarını yükle
             LoadColumnsGrid(data);
 
@@ -140,6 +144,17 @@ namespace Csv2Code
 
             // Kod önizlemesini temizle
             rtbCodePreview.Clear();
+        }
+
+        private void PopulateGroupByDropdown(CsvFileData data)
+        {
+            cmbGroupBy.Items.Clear();
+            cmbGroupBy.Items.Add("(Gruplama Yok)");
+            foreach (var col in data.Columns)
+            {
+                cmbGroupBy.Items.Add(col.OriginalName);
+            }
+            cmbGroupBy.SelectedIndex = 0;
         }
 
         private void LoadColumnsGrid(CsvFileData data)
@@ -154,6 +169,8 @@ namespace Csv2Code
                 row.Cells["colOriginalName"].Value = column.OriginalName;
                 row.Cells["colPropertyName"].Value = column.PropertyName;
                 row.Cells["colCSharpType"].Value = column.CSharpType;
+                row.Cells["colGroupName"].Value = column.GroupName;
+                row.Cells["colCollectionType"].Value = column.CollectionType.ToString();
 
                 // İlk satırdan örnek değer al
                 var sampleValue = data.Rows.Count > 0 && column.ColumnIndex < data.Rows[0].Length
@@ -214,6 +231,32 @@ namespace Csv2Code
                 if (!string.IsNullOrWhiteSpace(newType))
                     column.CSharpType = newType;
             }
+            else if (e.ColumnIndex == dgvColumns.Columns["colGroupName"]!.Index)
+            {
+                column.GroupName = dgvColumns.Rows[e.RowIndex].Cells["colGroupName"].Value?.ToString() ?? "";
+                // Grup adı girildiğinde koleksiyon tipi None ise otomatik List yap
+                if (!string.IsNullOrWhiteSpace(column.GroupName) && column.CollectionType == GroupCollectionType.None)
+                {
+                    column.CollectionType = GroupCollectionType.List;
+                    dgvColumns.Rows[e.RowIndex].Cells["colCollectionType"].Value = "List";
+                }
+                // Grup adı temizlenirse koleksiyon tipini de temizle
+                if (string.IsNullOrWhiteSpace(column.GroupName))
+                {
+                    column.CollectionType = GroupCollectionType.None;
+                    dgvColumns.Rows[e.RowIndex].Cells["colCollectionType"].Value = "None";
+                }
+            }
+            else if (e.ColumnIndex == dgvColumns.Columns["colCollectionType"]!.Index)
+            {
+                var colType = dgvColumns.Rows[e.RowIndex].Cells["colCollectionType"].Value?.ToString() ?? "None";
+                column.CollectionType = colType switch
+                {
+                    "List" => GroupCollectionType.List,
+                    "Array" => GroupCollectionType.Array,
+                    _ => GroupCollectionType.None
+                };
+            }
         }
 
         #endregion
@@ -229,10 +272,12 @@ namespace Csv2Code
             }
 
             SyncColumnsFromGrid();
+            var groupByIndex = GetGroupByColumnIndex();
             var code = CodeGeneratorService.GenerateCode(
                 _selectedFile,
                 txtClassName.Text,
-                txtNamespace.Text
+                txtNamespace.Text,
+                groupByIndex
             );
 
             ApplySyntaxHighlighting(code);
@@ -283,10 +328,12 @@ namespace Csv2Code
             try
             {
                 SyncColumnsFromGrid();
+                var groupByIndex = GetGroupByColumnIndex();
                 var code = CodeGeneratorService.GenerateCode(
                     _selectedFile,
                     txtClassName.Text,
-                    txtNamespace.Text
+                    txtNamespace.Text,
+                    groupByIndex
                 );
 
                 File.WriteAllText(exportPath, code, System.Text.Encoding.UTF8);
@@ -318,6 +365,51 @@ namespace Csv2Code
             UpdateStatus("📋 Kod panoya kopyalandı.");
         }
 
+        private void BtnAppendToFile_Click(object? sender, EventArgs e)
+        {
+            if (_selectedFile == null)
+            {
+                ShowWarning("Önce bir CSV dosyası seçin.");
+                return;
+            }
+
+            using var dialog = new OpenFileDialog
+            {
+                Title = "Mevcut C# Dosyasını Seçin",
+                Filter = "C# Dosyaları (*.cs)|*.cs",
+                Multiselect = false
+            };
+
+            if (dialog.ShowDialog() != DialogResult.OK)
+                return;
+
+            try
+            {
+                SyncColumnsFromGrid();
+                var existingContent = File.ReadAllText(dialog.FileName, System.Text.Encoding.UTF8);
+                var updatedCode = CodeGeneratorService.AppendToExistingFile(
+                    existingContent,
+                    _selectedFile,
+                    txtClassName.Text
+                );
+
+                File.WriteAllText(dialog.FileName, updatedCode, System.Text.Encoding.UTF8);
+                ApplySyntaxHighlighting(updatedCode);
+                UpdateStatus($"✅ {_selectedFile.Rows.Count} satır mevcut dosyaya eklendi: {dialog.FileName}");
+
+                MessageBox.Show(
+                    $"{_selectedFile.Rows.Count} satır başarıyla eklendi:\n{dialog.FileName}",
+                    "Başarılı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                );
+            }
+            catch (Exception ex)
+            {
+                ShowError("Dosyaya ekleme hatası", ex.Message);
+            }
+        }
+
         /// <summary>
         /// Grid'deki değişiklikleri model'e senkronize eder.
         /// </summary>
@@ -337,7 +429,29 @@ namespace Csv2Code
                 var csharpType = row.Cells["colCSharpType"].Value?.ToString();
                 if (!string.IsNullOrWhiteSpace(csharpType))
                     column.CSharpType = csharpType;
+
+                column.GroupName = row.Cells["colGroupName"].Value?.ToString() ?? "";
+
+                var colTypeStr = row.Cells["colCollectionType"].Value?.ToString() ?? "None";
+                column.CollectionType = colTypeStr switch
+                {
+                    "List" => GroupCollectionType.List,
+                    "Array" => GroupCollectionType.Array,
+                    _ => GroupCollectionType.None
+                };
             }
+        }
+
+        /// <summary>
+        /// Group By dropdown'undan seçilen kolonun index'ini döndürür. -1 = gruplama yok.
+        /// </summary>
+        private int GetGroupByColumnIndex()
+        {
+            if (_selectedFile == null || cmbGroupBy.SelectedIndex <= 0)
+                return -1;
+
+            // İlk item "(Gruplama Yok)" olduğu için index - 1
+            return cmbGroupBy.SelectedIndex - 1;
         }
 
         #endregion
