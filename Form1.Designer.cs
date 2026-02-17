@@ -33,7 +33,7 @@
             // ===== Form Ayarları =====
             AutoScaleMode = AutoScaleMode.Dpi;
             ClientSize = new Size(1440, 860);
-            Text = "CSV → C# Code Generator";
+            Text = "CSV → Code Generator";
             BackColor = bgDark;
             ForeColor = textLight;
             Font = new Font("Segoe UI", 9.5F, FontStyle.Regular);
@@ -122,7 +122,7 @@
             pnlExportSettings = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 310,
+                Height = 370,
                 BackColor = bgPanel,
                 Padding = new Padding(0, 8, 0, 0)
             };
@@ -246,15 +246,67 @@
             cmbGroupBy.Items.Add("(Gruplama Yok)");
             cmbGroupBy.SelectedIndex = 0;
 
+            // Lookup Key dropdown
+            lblLookupKey = new Label
+            {
+                Text = "Lookup Key:",
+                Dock = DockStyle.Top,
+                Height = 22,
+                ForeColor = textMuted,
+                Font = new Font("Segoe UI", 8.5F),
+                Padding = new Padding(4, 4, 0, 0)
+            };
+
+            cmbLookupKey = new ComboBox
+            {
+                Dock = DockStyle.Top,
+                Height = 28,
+                BackColor = bgInput,
+                ForeColor = textLight,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9.5F),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            cmbLookupKey.Items.Add("(Lookup Yok)");
+            cmbLookupKey.SelectedIndex = 0;
+
+            // Hedef Dil dropdown
+            lblLanguage = new Label
+            {
+                Text = "Hedef Dil:",
+                Dock = DockStyle.Top,
+                Height = 22,
+                ForeColor = textMuted,
+                Font = new Font("Segoe UI", 8.5F),
+                Padding = new Padding(4, 4, 0, 0)
+            };
+
+            cmbLanguage = new ComboBox
+            {
+                Dock = DockStyle.Top,
+                Height = 28,
+                BackColor = bgInput,
+                ForeColor = textLight,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 9.5F),
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            cmbLanguage.Items.AddRange(new object[] { "C#", "C++", "C", "Python", "Java" });
+            cmbLanguage.SelectedIndex = 0;
+
             // Export settings paneline ekle (ters sıra - dock top)
             pnlExportSettings.Controls.Add(pnlExportPathRow);
             pnlExportSettings.Controls.Add(lblExportPath);
+            pnlExportSettings.Controls.Add(cmbLookupKey);
+            pnlExportSettings.Controls.Add(lblLookupKey);
             pnlExportSettings.Controls.Add(cmbGroupBy);
             pnlExportSettings.Controls.Add(lblGroupBy);
             pnlExportSettings.Controls.Add(txtNamespace);
             pnlExportSettings.Controls.Add(lblNamespace);
             pnlExportSettings.Controls.Add(txtClassName);
             pnlExportSettings.Controls.Add(lblClassName);
+            pnlExportSettings.Controls.Add(cmbLanguage);
+            pnlExportSettings.Controls.Add(lblLanguage);
             pnlExportSettings.Controls.Add(lblExportTitle);
 
             // Sol panele kontrol ekle (ters sıra)
@@ -369,12 +421,12 @@
             var colCSharpType = new DataGridViewComboBoxColumn
             {
                 Name = "colCSharpType",
-                HeaderText = "C# Tipi",
+                HeaderText = "Tip",
                 FillWeight = 18,
                 FlatStyle = FlatStyle.Flat,
                 DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton
             };
-            colCSharpType.Items.AddRange(Services.CodeGeneratorService.SupportedTypes);
+            colCSharpType.Items.AddRange(Services.CodeGeneratorService.GetSupportedTypes(Models.TargetLanguage.CSharp));
 
             var colGroupName = new DataGridViewTextBoxColumn
             {
@@ -402,7 +454,16 @@
                 FillWeight = 10
             };
 
-            dgvColumns.Columns.AddRange(colOriginalName, colPropertyName, colCSharpType, colGroupName, colCollectionType, colSampleValue);
+            var colUnique = new DataGridViewCheckBoxColumn
+            {
+                Name = "colUnique",
+                HeaderText = "Unique",
+                FillWeight = 8,
+                TrueValue = true,
+                FalseValue = false
+            };
+
+            dgvColumns.Columns.AddRange(colOriginalName, colPropertyName, colCSharpType, colGroupName, colCollectionType, colSampleValue, colUnique);
 
             splitCenter.Panel1.Controls.Add(dgvColumns);
             splitCenter.Panel1.Controls.Add(lblColumnsTitle);
@@ -635,6 +696,10 @@
         private Button btnBrowseExport;
         private Label lblGroupBy;
         private ComboBox cmbGroupBy;
+        private Label lblLookupKey;
+        private ComboBox cmbLookupKey;
+        private Label lblLanguage;
+        private ComboBox cmbLanguage;
 
         // Orta — Split containers
         private SplitContainer splitMain;

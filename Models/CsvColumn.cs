@@ -37,6 +37,11 @@ public class CsvColumn
     public GroupCollectionType CollectionType { get; set; } = GroupCollectionType.None;
 
     /// <summary>
+    /// Bu kolon için unique değer dizisi üretilsin mi?
+    /// </summary>
+    public bool IsUnique { get; set; }
+
+    /// <summary>
     /// Bu kolon standalone mı (gruplama yok)?
     /// </summary>
     public bool IsStandalone => string.IsNullOrWhiteSpace(GroupName);

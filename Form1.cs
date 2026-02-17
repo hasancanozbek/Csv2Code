@@ -28,6 +28,7 @@ namespace Csv2Code
             lstFiles.SelectedIndexChanged += LstFiles_SelectedIndexChanged;
             dgvColumns.CellValueChanged += DgvColumns_CellValueChanged;
             dgvColumns.CurrentCellDirtyStateChanged += DgvColumns_CurrentCellDirtyStateChanged;
+            cmbLanguage.SelectedIndexChanged += CmbLanguage_SelectedIndexChanged;
         }
 
         #endregion
@@ -150,11 +151,17 @@ namespace Csv2Code
         {
             cmbGroupBy.Items.Clear();
             cmbGroupBy.Items.Add("(Gruplama Yok)");
+
+            cmbLookupKey.Items.Clear();
+            cmbLookupKey.Items.Add("(Lookup Yok)");
+
             foreach (var col in data.Columns)
             {
                 cmbGroupBy.Items.Add(col.OriginalName);
+                cmbLookupKey.Items.Add(col.OriginalName);
             }
             cmbGroupBy.SelectedIndex = 0;
+            cmbLookupKey.SelectedIndex = 0;
         }
 
         private void LoadColumnsGrid(CsvFileData data)
@@ -171,6 +178,7 @@ namespace Csv2Code
                 row.Cells["colCSharpType"].Value = column.CSharpType;
                 row.Cells["colGroupName"].Value = column.GroupName;
                 row.Cells["colCollectionType"].Value = column.CollectionType.ToString();
+                row.Cells["colUnique"].Value = column.IsUnique;
 
                 // İlk satırdan örnek değer al
                 var sampleValue = data.Rows.Count > 0 && column.ColumnIndex < data.Rows[0].Length
@@ -257,6 +265,11 @@ namespace Csv2Code
                     _ => GroupCollectionType.None
                 };
             }
+            else if (e.ColumnIndex == dgvColumns.Columns["colUnique"]!.Index)
+            {
+                var isUnique = dgvColumns.Rows[e.RowIndex].Cells["colUnique"].Value;
+                column.IsUnique = isUnique is true;
+            }
         }
 
         #endregion
@@ -273,11 +286,15 @@ namespace Csv2Code
 
             SyncColumnsFromGrid();
             var groupByIndex = GetGroupByColumnIndex();
+            var lookupKeyIndex = GetLookupKeyColumnIndex();
+            var lang = GetSelectedLanguage();
             var code = CodeGeneratorService.GenerateCode(
                 _selectedFile,
                 txtClassName.Text,
                 txtNamespace.Text,
-                groupByIndex
+                groupByIndex,
+                lang,
+                lookupKeyIndex
             );
 
             ApplySyntaxHighlighting(code);
@@ -293,14 +310,18 @@ namespace Csv2Code
             }
 
             var exportPath = txtExportPath.Text.Trim();
+            var lang = GetSelectedLanguage();
+            var ext = CodeGeneratorService.GetFileExtension(lang);
+            var generator = CodeGeneratorService.GetGenerator(lang);
+            var langName = generator.LanguageName;
+
             if (string.IsNullOrEmpty(exportPath))
             {
-                // SaveFileDialog ile sor
                 using var dialog = new SaveFileDialog
                 {
-                    Title = "C# Dosyasını Kaydet",
-                    Filter = "C# Dosyaları (*.cs)|*.cs",
-                    FileName = $"{txtClassName.Text}.cs"
+                    Title = $"{langName} Dosyasını Kaydet",
+                    Filter = $"{langName} Dosyaları (*{ext})|*{ext}",
+                    FileName = $"{txtClassName.Text}{ext}"
                 };
 
                 if (dialog.ShowDialog() != DialogResult.OK)
@@ -311,14 +332,13 @@ namespace Csv2Code
             }
             else
             {
-                // Klasör yolu ise dosya adı ekle
                 if (Directory.Exists(exportPath))
                 {
-                    exportPath = Path.Combine(exportPath, $"{txtClassName.Text}.cs");
+                    exportPath = Path.Combine(exportPath, $"{txtClassName.Text}{ext}");
                 }
-                else if (!exportPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                else if (!exportPath.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
                 {
-                    exportPath = Path.Combine(exportPath, $"{txtClassName.Text}.cs");
+                    exportPath = Path.Combine(exportPath, $"{txtClassName.Text}{ext}");
                     var dir = Path.GetDirectoryName(exportPath);
                     if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                         Directory.CreateDirectory(dir);
@@ -329,11 +349,14 @@ namespace Csv2Code
             {
                 SyncColumnsFromGrid();
                 var groupByIndex = GetGroupByColumnIndex();
+                var lookupKeyIndex = GetLookupKeyColumnIndex();
                 var code = CodeGeneratorService.GenerateCode(
                     _selectedFile,
                     txtClassName.Text,
                     txtNamespace.Text,
-                    groupByIndex
+                    groupByIndex,
+                    lang,
+                    lookupKeyIndex
                 );
 
                 File.WriteAllText(exportPath, code, System.Text.Encoding.UTF8);
@@ -373,10 +396,14 @@ namespace Csv2Code
                 return;
             }
 
+            var lang = GetSelectedLanguage();
+            var ext = CodeGeneratorService.GetFileExtension(lang);
+            var generator = CodeGeneratorService.GetGenerator(lang);
+
             using var dialog = new OpenFileDialog
             {
-                Title = "Mevcut C# Dosyasını Seçin",
-                Filter = "C# Dosyaları (*.cs)|*.cs",
+                Title = $"Mevcut {generator.LanguageName} Dosyasını Seçin",
+                Filter = $"{generator.LanguageName} Dosyaları (*{ext})|*{ext}",
                 Multiselect = false
             };
 
@@ -390,7 +417,8 @@ namespace Csv2Code
                 var updatedCode = CodeGeneratorService.AppendToExistingFile(
                     existingContent,
                     _selectedFile,
-                    txtClassName.Text
+                    txtClassName.Text,
+                    lang
                 );
 
                 File.WriteAllText(dialog.FileName, updatedCode, System.Text.Encoding.UTF8);
@@ -439,6 +467,9 @@ namespace Csv2Code
                     "Array" => GroupCollectionType.Array,
                     _ => GroupCollectionType.None
                 };
+
+                var isUnique = row.Cells["colUnique"].Value;
+                column.IsUnique = isUnique is true;
             }
         }
 
@@ -452,6 +483,64 @@ namespace Csv2Code
 
             // İlk item "(Gruplama Yok)" olduğu için index - 1
             return cmbGroupBy.SelectedIndex - 1;
+        }
+
+        /// <summary>
+        /// Lookup Key dropdown'ından seçilen kolonun index'ini döndürür. -1 = lookup yok.
+        /// </summary>
+        private int GetLookupKeyColumnIndex()
+        {
+            if (_selectedFile == null || cmbLookupKey.SelectedIndex <= 0)
+                return -1;
+
+            return cmbLookupKey.SelectedIndex - 1;
+        }
+
+        /// <summary>
+        /// Dropdown'dan seçili hedef dili döndürür.
+        /// </summary>
+        private TargetLanguage GetSelectedLanguage()
+        {
+            return cmbLanguage.SelectedIndex switch
+            {
+                0 => TargetLanguage.CSharp,
+                1 => TargetLanguage.Cpp,
+                2 => TargetLanguage.C,
+                3 => TargetLanguage.Python,
+                4 => TargetLanguage.Java,
+                _ => TargetLanguage.CSharp,
+            };
+        }
+
+        /// <summary>
+        /// Dil değiştiğinde tip sütunu seçeneklerini günceller.
+        /// </summary>
+        private void CmbLanguage_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            var lang = GetSelectedLanguage();
+            var types = CodeGeneratorService.GetSupportedTypes(lang);
+
+            // dgvColumns'daki colCSharpType ComboBox sütununu güncelle
+            if (dgvColumns.Columns["colCSharpType"] is DataGridViewComboBoxColumn typeCol)
+            {
+                typeCol.Items.Clear();
+                foreach (var t in types)
+                    typeCol.Items.Add(t);
+            }
+
+            // Mevcut satırlardaki seçili tipi kontrol et — eğer yeni dilde yoksa string/varsayılan yap
+            for (int i = 0; i < dgvColumns.Rows.Count; i++)
+            {
+                var cell = dgvColumns.Rows[i].Cells["colCSharpType"];
+                var currentType = cell.Value?.ToString() ?? "";
+                if (!types.Contains(currentType))
+                {
+                    cell.Value = types[0]; // ilk tip (string/str/String/...)
+                }
+            }
+
+            // Önizlemeyi temizle
+            rtbCodePreview.Clear();
         }
 
         #endregion
