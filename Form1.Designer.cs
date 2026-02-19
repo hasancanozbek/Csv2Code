@@ -111,6 +111,21 @@
                 Font = new Font("Segoe UI", 9F)
             };
 
+            btnRemoveFile = new Button
+            {
+                Text = "❌  Dosyayı Kaldır",
+                Dock = DockStyle.Bottom,
+                Height = 30,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(80, 40, 40),
+                ForeColor = Color.FromArgb(255, 140, 140),
+                Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 4, 0, 0)
+            };
+            btnRemoveFile.FlatAppearance.BorderColor = Color.FromArgb(120, 50, 50);
+            btnRemoveFile.FlatAppearance.MouseOverBackColor = Color.FromArgb(110, 45, 45);
+
             var pnlLeftSeparator = new Panel
             {
                 Dock = DockStyle.Top,
@@ -311,6 +326,7 @@
 
             // Sol panele kontrol ekle (ters sıra)
             pnlLeft.Controls.Add(lstFiles);
+            pnlLeft.Controls.Add(btnRemoveFile);
             pnlLeft.Controls.Add(lblFilesTitle);
             pnlLeft.Controls.Add(pnlLeftSeparator);
             pnlLeft.Controls.Add(btnImportFolder);
@@ -402,12 +418,21 @@
             };
 
             // Kolon tanımları
+            var colInclude = new DataGridViewCheckBoxColumn
+            {
+                Name = "colInclude",
+                HeaderText = "Dahil",
+                FillWeight = 6,
+                TrueValue = true,
+                FalseValue = false
+            };
+
             var colOriginalName = new DataGridViewTextBoxColumn
             {
                 Name = "colOriginalName",
                 HeaderText = "Orijinal Ad",
                 ReadOnly = true,
-                FillWeight = 20
+                FillWeight = 18
             };
 
             var colPropertyName = new DataGridViewTextBoxColumn
@@ -415,14 +440,14 @@
                 Name = "colPropertyName",
                 HeaderText = "Property Adı",
                 ReadOnly = false,
-                FillWeight = 20
+                FillWeight = 18
             };
 
             var colCSharpType = new DataGridViewComboBoxColumn
             {
                 Name = "colCSharpType",
                 HeaderText = "Tip",
-                FillWeight = 18,
+                FillWeight = 14,
                 FlatStyle = FlatStyle.Flat,
                 DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton
             };
@@ -433,39 +458,64 @@
                 Name = "colGroupName",
                 HeaderText = "Grup Adı",
                 ReadOnly = false,
-                FillWeight = 18
+                FillWeight = 14
             };
 
             var colCollectionType = new DataGridViewComboBoxColumn
             {
                 Name = "colCollectionType",
                 HeaderText = "Koleksiyon",
-                FillWeight = 14,
+                FillWeight = 10,
                 FlatStyle = FlatStyle.Flat,
                 DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton
             };
             colCollectionType.Items.AddRange(Services.CodeGeneratorService.CollectionTypes);
 
-            var colSampleValue = new DataGridViewTextBoxColumn
-            {
-                Name = "colSampleValue",
-                HeaderText = "Örnek Değer",
-                ReadOnly = true,
-                FillWeight = 10
-            };
-
             var colUnique = new DataGridViewCheckBoxColumn
             {
                 Name = "colUnique",
                 HeaderText = "Unique",
-                FillWeight = 8,
+                FillWeight = 6,
                 TrueValue = true,
                 FalseValue = false
             };
 
-            dgvColumns.Columns.AddRange(colOriginalName, colPropertyName, colCSharpType, colGroupName, colCollectionType, colSampleValue, colUnique);
+            dgvColumns.Columns.AddRange(colInclude, colOriginalName, colPropertyName, colCSharpType, colGroupName, colCollectionType, colUnique);
+
+            // --- Enum Ayarları Paneli (grid altı) ---
+            pnlEnumSettings = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 40,
+                BackColor = Color.FromArgb(45, 45, 68),
+                Padding = new Padding(12, 6, 12, 6),
+                Visible = false
+            };
+
+            lblEnumName = new Label
+            {
+                Text = "🔗 Enum Adı:",
+                AutoSize = true,
+                ForeColor = Color.FromArgb(130, 160, 255),
+                Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
+                Location = new Point(12, 10)
+            };
+
+            txtEnumName = new TextBox
+            {
+                Width = 220,
+                Location = new Point(110, 7),
+                BackColor = Color.FromArgb(50, 50, 72),
+                ForeColor = Color.FromArgb(220, 220, 240),
+                BorderStyle = BorderStyle.FixedSingle,
+                Font = new Font("Segoe UI", 9.5F)
+            };
+
+            pnlEnumSettings.Controls.Add(txtEnumName);
+            pnlEnumSettings.Controls.Add(lblEnumName);
 
             splitCenter.Panel1.Controls.Add(dgvColumns);
+            splitCenter.Panel1.Controls.Add(pnlEnumSettings);
             splitCenter.Panel1.Controls.Add(lblColumnsTitle);
 
             // --- Veri Önizleme ---
@@ -680,6 +730,7 @@
         private Label lblImportTitle;
         private Button btnImportFile;
         private Button btnImportFolder;
+        private Button btnRemoveFile;
         private Label lblFilesTitle;
         private ListBox lstFiles;
 
@@ -708,6 +759,9 @@
         // Orta — Kolon Ayarları
         private Label lblColumnsTitle;
         private DataGridView dgvColumns;
+        private Panel pnlEnumSettings;
+        private Label lblEnumName;
+        private TextBox txtEnumName;
 
         // Orta — Veri Önizleme
         private Label lblDataPreviewTitle;

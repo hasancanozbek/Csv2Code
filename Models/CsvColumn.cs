@@ -42,6 +42,17 @@ public class CsvColumn
     public bool IsUnique { get; set; }
 
     /// <summary>
+    /// Bu kolon kod üretimine dahil mi? (false ise atlanır)
+    /// </summary>
+    public bool IsIncluded { get; set; } = true;
+
+    /// <summary>
+    /// Kullanıcının belirlediği enum tipi adı.
+    /// Boşsa otomatik olarak PropertyName + "Type" kullanılır.
+    /// </summary>
+    public string EnumName { get; set; } = string.Empty;
+
+    /// <summary>
     /// Bu kolon standalone mı (gruplama yok)?
     /// </summary>
     public bool IsStandalone => string.IsNullOrWhiteSpace(GroupName);

@@ -95,7 +95,7 @@ public class CGenerator : CodeGeneratorBase
 
     private void GenerateEnumDefinitions(StringBuilder sb, CsvFileData data)
     {
-        var enumColumns = data.Columns.Where(c => c.CSharpType == "enum" && c.IsStandalone).ToList();
+        var enumColumns = data.Columns.Where(c => c.CSharpType == "enum" && c.IsStandalone && c.IsIncluded && IsDefaultEnumName(c)).ToList();
         if (enumColumns.Count == 0) return;
 
         foreach (var column in enumColumns)
@@ -127,7 +127,7 @@ public class CGenerator : CodeGeneratorBase
     {
         var processedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var column in data.Columns)
+        foreach (var column in data.Columns.Where(c => c.IsIncluded))
         {
             if (column.IsStandalone)
             {
@@ -202,7 +202,7 @@ public class CGenerator : CodeGeneratorBase
 
     private void GenerateUniqueArrays(StringBuilder sb, CsvFileData data)
     {
-        var uniqueColumns = data.Columns.Where(c => c.IsUnique).ToList();
+        var uniqueColumns = data.Columns.Where(c => c.IsUnique && c.IsIncluded).ToList();
         if (uniqueColumns.Count == 0) return;
 
         sb.AppendLine();
@@ -229,7 +229,7 @@ public class CGenerator : CodeGeneratorBase
         var processedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var values = new List<string>();
 
-        foreach (var column in data.Columns)
+        foreach (var column in data.Columns.Where(c => c.IsIncluded))
         {
             if (column.IsStandalone)
             {
@@ -250,7 +250,7 @@ public class CGenerator : CodeGeneratorBase
                 if (processedGroups.Add(column.GroupName))
                 {
                     var groupColumns = data.Columns
-                        .Where(c => c.GroupName.Equals(column.GroupName, StringComparison.OrdinalIgnoreCase))
+                        .Where(c => c.IsIncluded && c.GroupName.Equals(column.GroupName, StringComparison.OrdinalIgnoreCase))
                         .OrderBy(c => c.ColumnIndex).ToList();
                     var groupValues = groupColumns.Select(gc =>
                     {

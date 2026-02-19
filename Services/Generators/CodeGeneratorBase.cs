@@ -56,7 +56,23 @@ public abstract class CodeGeneratorBase
 
     public static string GetEnumTypeName(CsvColumn column)
     {
+        if (!string.IsNullOrWhiteSpace(column.EnumName))
+            return SanitizeIdentifier(column.EnumName);
+
         return SanitizeIdentifier(column.PropertyName) + "Type";
+    }
+
+    /// <summary>
+    /// Enum adı default mu (boş veya PropertyName + "Type")?
+    /// Default ise enum tanımı üretilir, farklıysa mevcut enum kabul edilir.
+    /// </summary>
+    public static bool IsDefaultEnumName(CsvColumn column)
+    {
+        if (string.IsNullOrWhiteSpace(column.EnumName))
+            return true;
+
+        var defaultName = SanitizeIdentifier(column.PropertyName) + "Type";
+        return string.Equals(column.EnumName.Trim(), defaultName, StringComparison.OrdinalIgnoreCase);
     }
 
     public static string SanitizeEnumMember(string value)

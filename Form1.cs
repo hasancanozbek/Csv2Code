@@ -20,6 +20,7 @@ namespace Csv2Code
         {
             btnImportFile.Click += BtnImportFile_Click;
             btnImportFolder.Click += BtnImportFolder_Click;
+            btnRemoveFile.Click += BtnRemoveFile_Click;
             btnBrowseExport.Click += BtnBrowseExport_Click;
             btnPreview.Click += BtnPreview_Click;
             btnSave.Click += BtnSave_Click;
@@ -28,7 +29,42 @@ namespace Csv2Code
             lstFiles.SelectedIndexChanged += LstFiles_SelectedIndexChanged;
             dgvColumns.CellValueChanged += DgvColumns_CellValueChanged;
             dgvColumns.CurrentCellDirtyStateChanged += DgvColumns_CurrentCellDirtyStateChanged;
+            dgvColumns.SelectionChanged += DgvColumns_SelectionChanged;
+            txtEnumName.TextChanged += TxtEnumName_TextChanged;
             cmbLanguage.SelectedIndexChanged += CmbLanguage_SelectedIndexChanged;
+        }
+
+        #endregion
+
+        #region File Management
+
+        private void BtnRemoveFile_Click(object? sender, EventArgs e)
+        {
+            if (lstFiles.SelectedIndex < 0) return;
+
+            var index = lstFiles.SelectedIndex;
+            var file = _loadedFiles[index];
+
+            _loadedFiles.RemoveAt(index);
+            lstFiles.Items.RemoveAt(index);
+
+            if (_selectedFile == file)
+            {
+                _selectedFile = null;
+                dgvColumns.Rows.Clear();
+                dgvDataPreview.Columns.Clear();
+                dgvDataPreview.Rows.Clear();
+                rtbCodePreview.Clear();
+                pnlEnumSettings.Visible = false;
+            }
+
+            // Varsa bir sonraki veya önceki dosyayı seç
+            if (lstFiles.Items.Count > 0)
+            {
+                lstFiles.SelectedIndex = Math.Min(index, lstFiles.Items.Count - 1);
+            }
+
+            UpdateStatus($"🗑️ {file.FileName} kaldırıldı. {_loadedFiles.Count} dosya kaldı.");
         }
 
         #endregion
@@ -157,6 +193,7 @@ namespace Csv2Code
 
             foreach (var col in data.Columns)
             {
+                if (!col.IsIncluded) continue;
                 cmbGroupBy.Items.Add(col.OriginalName);
                 cmbLookupKey.Items.Add(col.OriginalName);
             }
@@ -173,19 +210,65 @@ namespace Csv2Code
                 var rowIndex = dgvColumns.Rows.Add();
                 var row = dgvColumns.Rows[rowIndex];
 
+                row.Cells["colInclude"].Value = column.IsIncluded;
                 row.Cells["colOriginalName"].Value = column.OriginalName;
                 row.Cells["colPropertyName"].Value = column.PropertyName;
                 row.Cells["colCSharpType"].Value = column.CSharpType;
                 row.Cells["colGroupName"].Value = column.GroupName;
                 row.Cells["colCollectionType"].Value = column.CollectionType.ToString();
                 row.Cells["colUnique"].Value = column.IsUnique;
-
-                // İlk satırdan örnek değer al
-                var sampleValue = data.Rows.Count > 0 && column.ColumnIndex < data.Rows[0].Length
-                    ? data.Rows[0][column.ColumnIndex]
-                    : "";
-                row.Cells["colSampleValue"].Value = sampleValue;
             }
+
+            pnlEnumSettings.Visible = false;
+        }
+
+        /// <summary>
+        /// Seçili satır değiştiğinde enum panelini göster/gizle.
+        /// </summary>
+        private void DgvColumns_SelectionChanged(object? sender, EventArgs e)
+        {
+            if (_selectedFile == null || dgvColumns.CurrentRow == null)
+            {
+                pnlEnumSettings.Visible = false;
+                return;
+            }
+
+            var rowIndex = dgvColumns.CurrentRow.Index;
+            if (rowIndex < 0 || rowIndex >= _selectedFile.Columns.Count)
+            {
+                pnlEnumSettings.Visible = false;
+                return;
+            }
+
+            var column = _selectedFile.Columns[rowIndex];
+            if (column.CSharpType == "enum")
+            {
+                pnlEnumSettings.Visible = true;
+                // Default enum adı ata eğer boşsa
+                if (string.IsNullOrWhiteSpace(column.EnumName))
+                    column.EnumName = Services.Generators.CodeGeneratorBase.SanitizeIdentifier(column.PropertyName) + "Type";
+
+                txtEnumName.Text = column.EnumName;
+            }
+            else
+            {
+                pnlEnumSettings.Visible = false;
+            }
+        }
+
+        /// <summary>
+        /// Enum adı değiştiğinde modeli güncelle.
+        /// </summary>
+        private void TxtEnumName_TextChanged(object? sender, EventArgs e)
+        {
+            if (_selectedFile == null || dgvColumns.CurrentRow == null) return;
+
+            var rowIndex = dgvColumns.CurrentRow.Index;
+            if (rowIndex < 0 || rowIndex >= _selectedFile.Columns.Count) return;
+
+            var column = _selectedFile.Columns[rowIndex];
+            if (column.CSharpType == "enum")
+                column.EnumName = txtEnumName.Text;
         }
 
         private void LoadDataPreview(CsvFileData data)
@@ -226,38 +309,57 @@ namespace Csv2Code
                 return;
 
             var column = _selectedFile.Columns[e.RowIndex];
+            var row = dgvColumns.Rows[e.RowIndex];
 
-            if (e.ColumnIndex == dgvColumns.Columns["colPropertyName"]!.Index)
+            if (e.ColumnIndex == dgvColumns.Columns["colInclude"]!.Index)
             {
-                var newName = dgvColumns.Rows[e.RowIndex].Cells["colPropertyName"].Value?.ToString();
+                column.IsIncluded = row.Cells["colInclude"].Value is true;
+            }
+            else if (e.ColumnIndex == dgvColumns.Columns["colPropertyName"]!.Index)
+            {
+                var newName = row.Cells["colPropertyName"].Value?.ToString();
                 if (!string.IsNullOrWhiteSpace(newName))
                     column.PropertyName = newName;
             }
             else if (e.ColumnIndex == dgvColumns.Columns["colCSharpType"]!.Index)
             {
-                var newType = dgvColumns.Rows[e.RowIndex].Cells["colCSharpType"].Value?.ToString();
+                var newType = row.Cells["colCSharpType"].Value?.ToString();
                 if (!string.IsNullOrWhiteSpace(newType))
                     column.CSharpType = newType;
+
+                // Enum seçildi/kaldırıldığında enum panelini güncelle
+                if (newType == "enum")
+                {
+                    if (string.IsNullOrWhiteSpace(column.EnumName))
+                        column.EnumName = Services.Generators.CodeGeneratorBase.SanitizeIdentifier(column.PropertyName) + "Type";
+                    pnlEnumSettings.Visible = true;
+                    txtEnumName.Text = column.EnumName;
+                }
+                else
+                {
+                    column.EnumName = "";
+                    pnlEnumSettings.Visible = false;
+                }
             }
             else if (e.ColumnIndex == dgvColumns.Columns["colGroupName"]!.Index)
             {
-                column.GroupName = dgvColumns.Rows[e.RowIndex].Cells["colGroupName"].Value?.ToString() ?? "";
+                column.GroupName = row.Cells["colGroupName"].Value?.ToString() ?? "";
                 // Grup adı girildiğinde koleksiyon tipi None ise otomatik List yap
                 if (!string.IsNullOrWhiteSpace(column.GroupName) && column.CollectionType == GroupCollectionType.None)
                 {
                     column.CollectionType = GroupCollectionType.List;
-                    dgvColumns.Rows[e.RowIndex].Cells["colCollectionType"].Value = "List";
+                    row.Cells["colCollectionType"].Value = "List";
                 }
                 // Grup adı temizlenirse koleksiyon tipini de temizle
                 if (string.IsNullOrWhiteSpace(column.GroupName))
                 {
                     column.CollectionType = GroupCollectionType.None;
-                    dgvColumns.Rows[e.RowIndex].Cells["colCollectionType"].Value = "None";
+                    row.Cells["colCollectionType"].Value = "None";
                 }
             }
             else if (e.ColumnIndex == dgvColumns.Columns["colCollectionType"]!.Index)
             {
-                var colType = dgvColumns.Rows[e.RowIndex].Cells["colCollectionType"].Value?.ToString() ?? "None";
+                var colType = row.Cells["colCollectionType"].Value?.ToString() ?? "None";
                 column.CollectionType = colType switch
                 {
                     "List" => GroupCollectionType.List,
@@ -267,7 +369,7 @@ namespace Csv2Code
             }
             else if (e.ColumnIndex == dgvColumns.Columns["colUnique"]!.Index)
             {
-                var isUnique = dgvColumns.Rows[e.RowIndex].Cells["colUnique"].Value;
+                var isUnique = row.Cells["colUnique"].Value;
                 column.IsUnique = isUnique is true;
             }
         }
@@ -450,6 +552,8 @@ namespace Csv2Code
                 var row = dgvColumns.Rows[i];
                 var column = _selectedFile.Columns[i];
 
+                column.IsIncluded = row.Cells["colInclude"].Value is true;
+
                 var propName = row.Cells["colPropertyName"].Value?.ToString();
                 if (!string.IsNullOrWhiteSpace(propName))
                     column.PropertyName = propName;
@@ -457,6 +561,8 @@ namespace Csv2Code
                 var csharpType = row.Cells["colCSharpType"].Value?.ToString();
                 if (!string.IsNullOrWhiteSpace(csharpType))
                     column.CSharpType = csharpType;
+
+                column.EnumName = column.CSharpType == "enum" ? column.EnumName : "";
 
                 column.GroupName = row.Cells["colGroupName"].Value?.ToString() ?? "";
 
