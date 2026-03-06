@@ -18,7 +18,7 @@ public class CGenerator : CodeGeneratorBase
     public override string FileExtension => ".h";
     public override string LanguageName => "C";
 
-    public override string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1, int lookupKeyColumnIndex = -1)
+    public override string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1)
     {
         if (string.IsNullOrWhiteSpace(className)) className = "GeneratedData";
         className = SanitizeIdentifier(className);
@@ -40,15 +40,124 @@ public class CGenerator : CodeGeneratorBase
 
         if (groupByColumnIndex >= 0 && groupByColumnIndex < data.Columns.Count)
             GenerateGroupedData(sb, data, className, groupByColumnIndex);
-        else if (lookupKeyColumnIndex >= 0 && lookupKeyColumnIndex < data.Columns.Count)
-            GenerateLookupData(sb, data, className, lookupKeyColumnIndex);
         else
             GenerateFlatData(sb, data, className);
 
-        GenerateUniqueArrays(sb, data);
+        sb.AppendLine($"#endif /* {upperName}_H */");
+        return sb.ToString();
+    }
+
+    public override string GenerateListCode(CsvFileData data, string variablePrefix, string namespaceName)
+    {
+        if (string.IsNullOrWhiteSpace(variablePrefix)) variablePrefix = "Data";
+        variablePrefix = SanitizeIdentifier(variablePrefix);
+        var upperName = variablePrefix.ToUpperInvariant();
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"#ifndef {upperName}_H");
+        sb.AppendLine($"#define {upperName}_H");
+        sb.AppendLine();
+        sb.AppendLine("#include <stdlib.h>");
+        sb.AppendLine();
+
+        foreach (var column in data.Columns.Where(c => c.IsIncluded))
+        {
+            var propName = SanitizeIdentifier(column.PropertyName);
+            var typeName = column.CSharpType == "enum" ? GetEnumTypeName(column) : MapType(column.CSharpType);
+            var isArrayColumn = ColumnHasArrayValues(data, column);
+
+            if (isArrayColumn)
+            {
+                GenerateMatrixList(sb, data, column, variablePrefix, propName, typeName);
+            }
+            else
+            {
+                GenerateFlatList(sb, data, column, variablePrefix, propName, typeName);
+            }
+        }
 
         sb.AppendLine($"#endif /* {upperName}_H */");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Düz liste üretir — hücrelerde array yoksa.
+    /// </summary>
+    private void GenerateFlatList(StringBuilder sb, CsvFileData data, CsvColumn column,
+        string variablePrefix, string propName, string typeName)
+    {
+        var rawValues = new List<string>();
+        foreach (var row in data.Rows)
+        {
+            var raw = column.ColumnIndex < row.Length ? row[column.ColumnIndex].Trim() : "";
+            rawValues.Add(raw);
+        }
+
+        if (column.IsUniqueList) rawValues = rawValues.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        var values = new List<string>();
+        foreach (var raw in rawValues)
+        {
+            if (column.CSharpType == "enum")
+                values.Add($"{GetEnumTypeName(column)}_{SanitizeEnumMember(raw)}");
+            else
+                values.Add(FormatValue(raw, column.CSharpType));
+        }
+
+        SortValues(values, column.ListSortOrder);
+
+        sb.AppendLine($"static const int {variablePrefix}_{propName}_count = {values.Count};");
+        sb.AppendLine($"static const {typeName} {variablePrefix}_{propName}[] = {{ {string.Join(", ", values)} }};");
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// Matris (2D array) üretir — hücrelerde array varsa.
+    /// C'de jagged array doğrudan desteklenmez, bu yüzden her satır ayrı array olarak üretilir
+    /// ve bir pointer dizisinde referans edilir.
+    /// </summary>
+    private void GenerateMatrixList(StringBuilder sb, CsvFileData data, CsvColumn column,
+        string variablePrefix, string propName, string typeName)
+    {
+        var allArrays = new List<List<string>>();
+        foreach (var row in data.Rows)
+        {
+            var raw = column.ColumnIndex < row.Length ? row[column.ColumnIndex].Trim() : "";
+            var elements = ParseArrayElements(raw);
+
+            if (column.IsUniqueList)
+                elements = elements.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            var formatted = new List<string>();
+            foreach (var elem in elements)
+            {
+                if (column.CSharpType == "enum")
+                    formatted.Add($"{GetEnumTypeName(column)}_{SanitizeEnumMember(elem)}");
+                else
+                    formatted.Add(FormatValue(elem, column.CSharpType));
+            }
+
+            SortValues(formatted, column.ListSortOrder);
+
+            allArrays.Add(formatted);
+        }
+
+        // Her satır ayrı array
+        for (int i = 0; i < allArrays.Count; i++)
+        {
+            var arr = allArrays[i];
+            sb.AppendLine($"static const {typeName} {variablePrefix}_{propName}_row{i}[] = {{ {string.Join(", ", arr)} }};");
+        }
+
+        // Satır uzunlukları
+        sb.AppendLine($"static const int {variablePrefix}_{propName}_row_count = {allArrays.Count};");
+        var lengths = allArrays.Select(a => a.Count.ToString());
+        sb.AppendLine($"static const int {variablePrefix}_{propName}_col_counts[] = {{ {string.Join(", ", lengths)} }};");
+
+        // Pointer dizisi: const T* array[]
+        var rowRefs = Enumerable.Range(0, allArrays.Count).Select(i => $"{variablePrefix}_{propName}_row{i}");
+        sb.AppendLine($"static const {typeName}* {variablePrefix}_{propName}[] = {{ {string.Join(", ", rowRefs)} }};");
+        sb.AppendLine();
     }
 
     public override string AppendToExistingFile(string existingContent, CsvFileData newData, string className)
@@ -70,7 +179,6 @@ public class CGenerator : CodeGeneratorBase
         if (insertIndex < 0)
             throw new InvalidOperationException("Mevcut dosyada data array kapanışı bulunamadı.");
 
-        // Eleman sayısını güncelle (basit yaklaşım)
         for (int i = insertIndex - 1; i >= 0; i--)
         {
             var trimmed = lines[i].TrimEnd('\r').TrimEnd();
@@ -166,7 +274,6 @@ public class CGenerator : CodeGeneratorBase
     {
         var groups = BuildGroups(data, groupByColumnIndex);
 
-        // Her grubu ayrı array olarak üret
         for (int gi = 0; gi < groups.Count; gi++)
         {
             var group = groups[gi];
@@ -179,49 +286,6 @@ public class CGenerator : CodeGeneratorBase
             sb.AppendLine("};");
             sb.AppendLine();
         }
-    }
-
-    private void GenerateLookupData(StringBuilder sb, CsvFileData data, string className, int lookupKeyColumnIndex)
-    {
-        var keyColumn = data.Columns[lookupKeyColumnIndex];
-        var groups = BuildGroups(data, lookupKeyColumnIndex);
-        var propName = SanitizeIdentifier(keyColumn.PropertyName);
-
-        foreach (var group in groups)
-        {
-            var safeName = SanitizeIdentifier(group.Key);
-            sb.AppendLine($"/* {propName} = {group.Key} */");
-            sb.AppendLine($"static const int {propName}_{safeName}_count = {group.Rows.Count};");
-            sb.AppendLine($"static const {className} {propName}_{safeName}[] = {{");
-            for (int ri = 0; ri < group.Rows.Count; ri++)
-                GenerateStructInit(sb, data, group.Rows[ri], "    ", ri < group.Rows.Count - 1);
-            sb.AppendLine("};");
-            sb.AppendLine();
-        }
-    }
-
-    private void GenerateUniqueArrays(StringBuilder sb, CsvFileData data)
-    {
-        var uniqueColumns = data.Columns.Where(c => c.IsUnique && c.IsIncluded).ToList();
-        if (uniqueColumns.Count == 0) return;
-
-        sb.AppendLine();
-        foreach (var column in uniqueColumns)
-        {
-            var propName = SanitizeIdentifier(column.PropertyName);
-            var typeName = column.CSharpType == "enum" ? GetEnumTypeName(column) : MapType(column.CSharpType);
-            var uniqueValues = GetUniqueColumnValues(data, column.ColumnIndex);
-
-            var formatted = uniqueValues.Select(v =>
-                column.CSharpType == "enum"
-                    ? SanitizeEnumMember(v)
-                    : FormatValue(v, column.CSharpType)
-            );
-
-            sb.AppendLine($"static const int unique_{propName}_count = {uniqueValues.Count};");
-            sb.AppendLine($"static const {typeName} unique_{propName}[] = {{ {string.Join(", ", formatted)} }};");
-        }
-        sb.AppendLine();
     }
 
     private void GenerateStructInit(StringBuilder sb, CsvFileData data, string[] row, string indent, bool trailing)

@@ -24,9 +24,14 @@ public abstract class CodeGeneratorBase
     public abstract string LanguageName { get; }
 
     /// <summary>
-    /// Kod üretir.
+    /// Obje modu: Kod üretir.
     /// </summary>
-    public abstract string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1, int lookupKeyColumnIndex = -1);
+    public abstract string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1);
+
+    /// <summary>
+    /// Liste modu: Her kolonu ayrı bir liste/array olarak üretir.
+    /// </summary>
+    public abstract string GenerateListCode(CsvFileData data, string variablePrefix, string namespaceName);
 
     /// <summary>
     /// Mevcut dosyaya ekleme yapar.
@@ -146,6 +151,208 @@ public abstract class CodeGeneratorBase
             .Replace("\n", "\\n")
             .Replace("\r", "\\r")
             .Replace("\t", "\\t");
+    }
+
+    /// <summary>
+    /// Hücre değerinin bir array pattern olup olmadığını kontrol eder.
+    /// {1;2;3}, {1.5,2.3}, [1;2;3], [a,b,c] gibi formatları algılar.
+    /// </summary>
+    public static bool IsArrayValue(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length < 3) return false;
+
+        return (trimmed.StartsWith('{') && trimmed.EndsWith('}'))
+            || (trimmed.StartsWith('[') && trimmed.EndsWith(']'));
+    }
+
+    /// <summary>
+    /// Bir kolondaki değerlerden herhangi birinin array olup olmadığını kontrol eder.
+    /// </summary>
+    public static bool ColumnHasArrayValues(CsvFileData data, CsvColumn column)
+    {
+        foreach (var row in data.Rows)
+        {
+            var raw = column.ColumnIndex < row.Length ? row[column.ColumnIndex].Trim() : "";
+            if (IsArrayValue(raw))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Array ayracını otomatik belirler:
+    /// - Eğer iç metinde ';' varsa → ayraç ';' dir (Avrupa/Excel standardı).
+    /// - Eğer ';' yoksa ve ',' varsa → ',' nin decimal mi array ayracı mı olduğunu belirle:
+    ///   • Eğer iç metinde '.' varsa → '.' ondalık, ',' array ayracı.
+    ///   • Eğer '.' yoksa → ',' nin context'ine bak: virgülden sonra 3+ basamak veya
+    ///     birden fazla ',' varsa array ayracı kabul et.
+    /// </summary>
+    public static char DetectArraySeparator(string arrayValue)
+    {
+        var inner = ExtractArrayInner(arrayValue);
+
+        // ';' varsa kesinlikle array ayracı
+        if (inner.Contains(';'))
+            return ';';
+
+        // ';' yok, ',' var mı?
+        if (!inner.Contains(','))
+            return ';'; // Tek elemanlı array, varsayılan ';'
+
+        // ',' var — ondalık mı array ayracı mı?
+        // Eğer '.' da varsa → '.' ondalık ayracı, ',' array ayracı
+        if (inner.Contains('.'))
+            return ',';
+
+        // '.' yok, sadece ',' var.
+        // Virgülle split edip parçaları incele:
+        var parts = inner.Split(',');
+
+        // 3+ parça varsa kesinlikle array ayracı
+        if (parts.Length >= 3)
+            return ',';
+
+        // 2 parça var — ondalık olabilir (1,5 gibi) veya array olabilir (1,2 gibi)
+        // Her iki parça da sayısal mı kontrol et:
+        // Eğer ikinci parçanın uzunluğu 1-2 ise ondalık olma ihtimali yüksek.
+        // Ama kesin karar vermek zor, bu yüzden daha geniş context'e bak.
+        if (parts.Length == 2)
+        {
+            var secondPart = parts[1].Trim();
+            // İkinci parça 1-2 haneli sayı ve ilk parça da sayı ise → ondalık
+            if (secondPart.Length <= 2
+                && double.TryParse(parts[0].Trim(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _)
+                && double.TryParse(secondPart, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _))
+            {
+                // Tek bir ondalık sayı olarak yorumla — array DEĞİL
+                // Ama burada array ayracı sorsak bile, aslında dıştaki {} zaten
+                // array olduğunu gösteriyor. {3,14} → 3.14 mü yoksa [3, 14] mi?
+                // Eğer {} veya [] varsa array olarak yorumla.
+                return ',';
+            }
+            return ',';
+        }
+
+        return ',';
+    }
+
+    /// <summary>
+    /// Bir kolonun tüm array değerleri üzerinden array ayracını belirler.
+    /// İlk array değerindeki ayracı temel alır.
+    /// </summary>
+    public static char DetectColumnArraySeparator(CsvFileData data, CsvColumn column)
+    {
+        foreach (var row in data.Rows)
+        {
+            var raw = column.ColumnIndex < row.Length ? row[column.ColumnIndex].Trim() : "";
+            if (IsArrayValue(raw))
+                return DetectArraySeparator(raw);
+        }
+        return ';'; // varsayılan
+    }
+
+    /// <summary>
+    /// Array değerinin iç kısmını (parantez/bracket hariç) döndürür.
+    /// </summary>
+    public static string ExtractArrayInner(string arrayValue)
+    {
+        var trimmed = arrayValue.Trim();
+        if (trimmed.Length < 2) return trimmed;
+
+        if ((trimmed.StartsWith('{') && trimmed.EndsWith('}'))
+            || (trimmed.StartsWith('[') && trimmed.EndsWith(']')))
+        {
+            return trimmed[1..^1].Trim();
+        }
+
+        return trimmed;
+    }
+
+    /// <summary>
+    /// Bir array değerini elemanlarına ayırır.
+    /// </summary>
+    public static List<string> ParseArrayElements(string arrayValue)
+    {
+        if (!IsArrayValue(arrayValue))
+            return new List<string> { arrayValue.Trim() };
+
+        var separator = DetectArraySeparator(arrayValue);
+        var inner = ExtractArrayInner(arrayValue);
+
+        if (string.IsNullOrWhiteSpace(inner))
+            return new List<string>();
+
+        return inner.Split(separator)
+            .Select(e => e.Trim())
+            .Where(e => !string.IsNullOrWhiteSpace(e))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Formatlanmış değerler listesini numerik-farkındalıklı sıralar.
+    /// Değerlerden sayısal kısmı çıkararak karşılaştırma yapar;
+    /// sayısal çıkarılamazsa string olarak sıralar.
+    /// </summary>
+    public static void SortValues(List<string> values, Models.SortOrder sortOrder)
+    {
+        if (sortOrder == Models.SortOrder.None || values.Count <= 1)
+            return;
+
+        values.Sort(NumericAwareComparer);
+
+        if (sortOrder == Models.SortOrder.Descending)
+            values.Reverse();
+    }
+
+    /// <summary>
+    /// Formatlanmış literal değerleri numerik-farkındalıklı karşılaştırır.
+    /// "3456.3d" vs "78d" → sayısal olarak karşılaştırılır.
+    /// "\"abc\"" vs "\"xyz\"" → string olarak karşılaştırılır.
+    /// </summary>
+    private static int NumericAwareComparer(string a, string b)
+    {
+        var numA = ExtractNumericValue(a);
+        var numB = ExtractNumericValue(b);
+
+        if (numA.HasValue && numB.HasValue)
+            return numA.Value.CompareTo(numB.Value);
+
+        return StringComparer.Ordinal.Compare(a, b);
+    }
+
+    /// <summary>
+    /// Formatlanmış bir literal değerden sayısal kısmı çıkarır.
+    /// Örn: "3456.3d" → 3456.3, "78f" → 78, "123" → 123,
+    /// "True" → null, "\"abc\"" → null
+    /// </summary>
+    private static double? ExtractNumericValue(string formattedValue)
+    {
+        if (string.IsNullOrWhiteSpace(formattedValue))
+            return null;
+
+        var trimmed = formattedValue.Trim();
+
+        // String literal ise ("..." veya '...') sayısal değil
+        if ((trimmed.StartsWith('"') && trimmed.EndsWith('"'))
+            || (trimmed.StartsWith('\'') && trimmed.EndsWith('\'')))
+            return null;
+
+        // null, None, true, false, True, False gibi keyword'ler
+        if (trimmed is "null" or "None" or "true" or "false" or "True" or "False")
+            return null;
+
+        // Sondaki tip suffix'lerini temizle (d, f, m, L, 0.0f vb.)
+        var cleaned = trimmed.TrimEnd('d', 'f', 'm', 'L', 'F', 'D', 'M');
+
+        if (string.IsNullOrEmpty(cleaned))
+            return null;
+
+        if (double.TryParse(cleaned, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out double result))
+            return result;
+
+        return null;
     }
 
     #endregion

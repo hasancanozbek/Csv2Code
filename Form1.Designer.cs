@@ -1,4 +1,4 @@
-﻿namespace Csv2Code
+namespace Csv2Code
 {
     partial class Form1
     {
@@ -26,6 +26,7 @@
             var accentBlue = Color.FromArgb(100, 140, 255);
             var accentGreen = Color.FromArgb(80, 200, 120);
             var accentOrange = Color.FromArgb(255, 165, 80);
+            var accentPurple = Color.FromArgb(160, 120, 255);
             var textLight = Color.FromArgb(220, 220, 240);
             var textMuted = Color.FromArgb(160, 160, 185);
             var borderColor = Color.FromArgb(65, 65, 90);
@@ -137,7 +138,7 @@
             pnlExportSettings = new Panel
             {
                 Dock = DockStyle.Bottom,
-                Height = 370,
+                Height = 310,
                 BackColor = bgPanel,
                 Padding = new Padding(0, 8, 0, 0)
             };
@@ -261,30 +262,6 @@
             cmbGroupBy.Items.Add("(Gruplama Yok)");
             cmbGroupBy.SelectedIndex = 0;
 
-            // Lookup Key dropdown
-            lblLookupKey = new Label
-            {
-                Text = "Lookup Key:",
-                Dock = DockStyle.Top,
-                Height = 22,
-                ForeColor = textMuted,
-                Font = new Font("Segoe UI", 8.5F),
-                Padding = new Padding(4, 4, 0, 0)
-            };
-
-            cmbLookupKey = new ComboBox
-            {
-                Dock = DockStyle.Top,
-                Height = 28,
-                BackColor = bgInput,
-                ForeColor = textLight,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9.5F),
-                DropDownStyle = ComboBoxStyle.DropDownList
-            };
-            cmbLookupKey.Items.Add("(Lookup Yok)");
-            cmbLookupKey.SelectedIndex = 0;
-
             // Hedef Dil dropdown
             lblLanguage = new Label
             {
@@ -312,8 +289,6 @@
             // Export settings paneline ekle (ters sıra - dock top)
             pnlExportSettings.Controls.Add(pnlExportPathRow);
             pnlExportSettings.Controls.Add(lblExportPath);
-            pnlExportSettings.Controls.Add(cmbLookupKey);
-            pnlExportSettings.Controls.Add(lblLookupKey);
             pnlExportSettings.Controls.Add(cmbGroupBy);
             pnlExportSettings.Controls.Add(lblGroupBy);
             pnlExportSettings.Controls.Add(txtNamespace);
@@ -358,7 +333,7 @@
             splitMain.Panel2.BackColor = bgDark;
 
             // ================================================================
-            //  ORTA PANEL — Kolon Ayarları + Veri Önizleme (dikey split)
+            //  ORTA PANEL — TabControl + Veri Önizleme (dikey split)
             // ================================================================
             splitCenter = new SplitContainer
             {
@@ -372,18 +347,45 @@
             splitCenter.Panel1.BackColor = bgDark;
             splitCenter.Panel2.BackColor = bgDark;
 
-            // --- Kolon Ayarları ---
-            lblColumnsTitle = new Label
+            // --- Tab Control — Mod Seçimi ---
+            tabMode = new DarkTabControl
             {
-                Text = "📋  KOLON AYARLARI",
-                Dock = DockStyle.Top,
-                Height = 36,
-                Font = new Font("Segoe UI", 11F, FontStyle.Bold),
-                ForeColor = accentBlue,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(12, 0, 0, 0)
+                Dock = DockStyle.Fill,
+                Font = new Font("Segoe UI", 10F, FontStyle.Bold),
+                DrawMode = TabDrawMode.OwnerDrawFixed,
+                SizeMode = TabSizeMode.Fixed,
+                ItemSize = new Size(200, 38),
+                Padding = new Point(0, 0)
+            };
+            tabMode.DrawItem += TabMode_DrawItem;
+            // Tab'ları üst alanın tamamını kaplayacak şekilde dinamik boyutlandır
+            bool isResizingTabs = false;
+            tabMode.Resize += (s, e) =>
+            {
+                if (isResizingTabs || tabMode.TabCount == 0) return;
+                var tabWidth = (tabMode.Width / tabMode.TabCount) - 2;
+                if (tabWidth == tabMode.ItemSize.Width) return;
+                isResizingTabs = true;
+                tabMode.ItemSize = new Size(tabWidth, 38);
+                isResizingTabs = false;
             };
 
+            // Tab sayfaları
+            tabObjectMode = new TabPage
+            {
+                Text = "📦  Obje Modu",
+                BackColor = bgDark,
+                Padding = new Padding(0)
+            };
+
+            tabListMode = new TabPage
+            {
+                Text = "📋  Liste Modu",
+                BackColor = bgDark,
+                Padding = new Padding(0)
+            };
+
+            // --- Obje Modu — Kolon Ayarları Grid ---
             dgvColumns = new DataGridView
             {
                 Dock = DockStyle.Fill,
@@ -417,12 +419,13 @@
                 ColumnHeadersHeight = 36
             };
 
-            // Kolon tanımları
+            // Obje Modu — Kolon tanımları
             var colInclude = new DataGridViewCheckBoxColumn
             {
                 Name = "colInclude",
                 HeaderText = "Dahil",
                 FillWeight = 6,
+                MinimumWidth = 50,
                 TrueValue = true,
                 FalseValue = false
             };
@@ -432,7 +435,8 @@
                 Name = "colOriginalName",
                 HeaderText = "Orijinal Ad",
                 ReadOnly = true,
-                FillWeight = 18
+                FillWeight = 18,
+                MinimumWidth = 90
             };
 
             var colPropertyName = new DataGridViewTextBoxColumn
@@ -440,14 +444,16 @@
                 Name = "colPropertyName",
                 HeaderText = "Property Adı",
                 ReadOnly = false,
-                FillWeight = 18
+                FillWeight = 18,
+                MinimumWidth = 100
             };
 
             var colCSharpType = new DataGridViewComboBoxColumn
             {
                 Name = "colCSharpType",
                 HeaderText = "Tip",
-                FillWeight = 14,
+                FillWeight = 12,
+                MinimumWidth = 60,
                 FlatStyle = FlatStyle.Flat,
                 DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton
             };
@@ -458,29 +464,22 @@
                 Name = "colGroupName",
                 HeaderText = "Grup Adı",
                 ReadOnly = false,
-                FillWeight = 14
+                FillWeight = 14,
+                MinimumWidth = 80
             };
 
             var colCollectionType = new DataGridViewComboBoxColumn
             {
                 Name = "colCollectionType",
                 HeaderText = "Koleksiyon",
-                FillWeight = 10,
+                FillWeight = 12,
+                MinimumWidth = 90,
                 FlatStyle = FlatStyle.Flat,
                 DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton
             };
             colCollectionType.Items.AddRange(Services.CodeGeneratorService.CollectionTypes);
 
-            var colUnique = new DataGridViewCheckBoxColumn
-            {
-                Name = "colUnique",
-                HeaderText = "Unique",
-                FillWeight = 6,
-                TrueValue = true,
-                FalseValue = false
-            };
-
-            dgvColumns.Columns.AddRange(colInclude, colOriginalName, colPropertyName, colCSharpType, colGroupName, colCollectionType, colUnique);
+            dgvColumns.Columns.AddRange(colInclude, colOriginalName, colPropertyName, colCSharpType, colGroupName, colCollectionType);
 
             // --- Enum Ayarları Paneli (grid altı) ---
             pnlEnumSettings = new Panel
@@ -514,9 +513,123 @@
             pnlEnumSettings.Controls.Add(txtEnumName);
             pnlEnumSettings.Controls.Add(lblEnumName);
 
-            splitCenter.Panel1.Controls.Add(dgvColumns);
-            splitCenter.Panel1.Controls.Add(pnlEnumSettings);
-            splitCenter.Panel1.Controls.Add(lblColumnsTitle);
+            tabObjectMode.Controls.Add(dgvColumns);
+            tabObjectMode.Controls.Add(pnlEnumSettings);
+
+            // --- Liste Modu — Kolon Ayarları Grid ---
+            dgvListColumns = new DataGridView
+            {
+                Dock = DockStyle.Fill,
+                BackgroundColor = bgPanel,
+                GridColor = borderColor,
+                BorderStyle = BorderStyle.None,
+                RowHeadersVisible = false,
+                AllowUserToAddRows = false,
+                AllowUserToDeleteRows = false,
+                AllowUserToResizeRows = false,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                Font = new Font("Segoe UI", 9.5F),
+                DefaultCellStyle = new DataGridViewCellStyle
+                {
+                    BackColor = bgPanel,
+                    ForeColor = textLight,
+                    SelectionBackColor = Color.FromArgb(60, 80, 140),
+                    SelectionForeColor = textLight,
+                    Padding = new Padding(4, 2, 4, 2)
+                },
+                ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+                {
+                    BackColor = Color.FromArgb(45, 45, 68),
+                    ForeColor = accentPurple,
+                    Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
+                    Padding = new Padding(4, 4, 4, 4),
+                    Alignment = DataGridViewContentAlignment.MiddleLeft
+                },
+                EnableHeadersVisualStyles = false,
+                ColumnHeadersHeight = 36
+            };
+
+            // Liste Modu — Kolon tanımları
+            var colListInclude = new DataGridViewCheckBoxColumn
+            {
+                Name = "colListInclude",
+                HeaderText = "Dahil",
+                FillWeight = 5,
+                MinimumWidth = 50,
+                TrueValue = true,
+                FalseValue = false
+            };
+
+            var colListOriginalName = new DataGridViewTextBoxColumn
+            {
+                Name = "colListOriginalName",
+                HeaderText = "Orijinal Ad",
+                ReadOnly = true,
+                FillWeight = 16,
+                MinimumWidth = 90
+            };
+
+            var colListVarName = new DataGridViewTextBoxColumn
+            {
+                Name = "colListVarName",
+                HeaderText = "Değişken Adı",
+                ReadOnly = false,
+                FillWeight = 16,
+                MinimumWidth = 100
+            };
+
+            var colListType = new DataGridViewComboBoxColumn
+            {
+                Name = "colListType",
+                HeaderText = "Tip",
+                FillWeight = 10,
+                MinimumWidth = 60,
+                FlatStyle = FlatStyle.Flat,
+                DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton
+            };
+            colListType.Items.AddRange(Services.CodeGeneratorService.GetSupportedTypes(Models.TargetLanguage.CSharp));
+
+            var colListCollectionType = new DataGridViewComboBoxColumn
+            {
+                Name = "colListCollectionType",
+                HeaderText = "Koleksiyon",
+                FillWeight = 11,
+                MinimumWidth = 90,
+                FlatStyle = FlatStyle.Flat,
+                DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton
+            };
+            colListCollectionType.Items.AddRange(Services.CodeGeneratorService.ListCollectionTypes);
+
+            var colListUnique = new DataGridViewCheckBoxColumn
+            {
+                Name = "colListUnique",
+                HeaderText = "Unique",
+                FillWeight = 5,
+                MinimumWidth = 60,
+                TrueValue = true,
+                FalseValue = false
+            };
+
+            var colListSortOrder = new DataGridViewComboBoxColumn
+            {
+                Name = "colListSortOrder",
+                HeaderText = "Sıralama",
+                FillWeight = 10,
+                MinimumWidth = 80,
+                FlatStyle = FlatStyle.Flat,
+                DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton
+            };
+            colListSortOrder.Items.AddRange(Services.CodeGeneratorService.SortOrders);
+
+            dgvListColumns.Columns.AddRange(colListInclude, colListOriginalName, colListVarName, colListType, colListCollectionType, colListUnique, colListSortOrder);
+
+            tabListMode.Controls.Add(dgvListColumns);
+
+            tabMode.TabPages.Add(tabObjectMode);
+            tabMode.TabPages.Add(tabListMode);
+
+            splitCenter.Panel1.Controls.Add(tabMode);
 
             // --- Veri Önizleme ---
             lblDataPreviewTitle = new Label
@@ -747,8 +860,6 @@
         private Button btnBrowseExport;
         private Label lblGroupBy;
         private ComboBox cmbGroupBy;
-        private Label lblLookupKey;
-        private ComboBox cmbLookupKey;
         private Label lblLanguage;
         private ComboBox cmbLanguage;
 
@@ -756,12 +867,19 @@
         private SplitContainer splitMain;
         private SplitContainer splitCenter;
 
-        // Orta — Kolon Ayarları
-        private Label lblColumnsTitle;
+        // Orta — Tab Control (Mod Seçimi)
+        private DarkTabControl tabMode;
+        private TabPage tabObjectMode;
+        private TabPage tabListMode;
+
+        // Orta — Obje Modu — Kolon Ayarları
         private DataGridView dgvColumns;
         private Panel pnlEnumSettings;
         private Label lblEnumName;
         private TextBox txtEnumName;
+
+        // Orta — Liste Modu — Kolon Ayarları
+        private DataGridView dgvListColumns;
 
         // Orta — Veri Önizleme
         private Label lblDataPreviewTitle;

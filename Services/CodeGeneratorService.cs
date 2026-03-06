@@ -6,7 +6,6 @@ namespace Csv2Code.Services;
 
 /// <summary>
 /// Facade / Factory — dil seçimine göre uygun generator'ı döndürür.
-/// Geriye uyumluluk için eski static metotlar korunmuştur.
 /// </summary>
 public static class CodeGeneratorService
 {
@@ -43,10 +42,26 @@ public static class CodeGeneratorService
     public static readonly string[] CollectionTypes = { "None", "List", "Array" };
 
     /// <summary>
-    /// Kod üretir (geriye uyumlu — varsayılan C#).
+    /// Liste modu için koleksiyon tipi seçenekleri (None hariç).
     /// </summary>
-    public static string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1, TargetLanguage language = TargetLanguage.CSharp, int lookupKeyColumnIndex = -1)
-        => GetGenerator(language).GenerateCode(data, className, namespaceName, groupByColumnIndex, lookupKeyColumnIndex);
+    public static readonly string[] ListCollectionTypes = { "List", "Array" };
+
+    /// <summary>
+    /// Sıralama seçenekleri.
+    /// </summary>
+    public static readonly string[] SortOrders = { "None", "Ascending", "Descending" };
+
+    /// <summary>
+    /// Obje modu: Kod üretir.
+    /// </summary>
+    public static string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1, TargetLanguage language = TargetLanguage.CSharp)
+        => GetGenerator(language).GenerateCode(data, className, namespaceName, groupByColumnIndex);
+
+    /// <summary>
+    /// Liste modu: Her kolonu ayrı bir liste/array olarak üretir.
+    /// </summary>
+    public static string GenerateListCode(CsvFileData data, string variablePrefix, string namespaceName, TargetLanguage language = TargetLanguage.CSharp)
+        => GetGenerator(language).GenerateListCode(data, variablePrefix, namespaceName);
 
     /// <summary>
     /// Mevcut dosyaya ekleme yapar.
@@ -60,7 +75,6 @@ public static class CodeGeneratorService
     public static string GenerateAppendPreview(CsvFileData data, string className, TargetLanguage language = TargetLanguage.CSharp)
     {
         className = CodeGeneratorBase.SanitizeIdentifier(className);
-        // Delegate to the generator for full code, then just return the data portion
         var fullCode = GetGenerator(language).GenerateCode(data, className, "Preview");
         return $"// === {data.Rows.Count} yeni satır ===\n{fullCode}";
     }

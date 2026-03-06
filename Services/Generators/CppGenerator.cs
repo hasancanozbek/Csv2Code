@@ -18,7 +18,7 @@ public class CppGenerator : CodeGeneratorBase
     public override string FileExtension => ".h";
     public override string LanguageName => "C++";
 
-    public override string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1, int lookupKeyColumnIndex = -1)
+    public override string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1)
     {
         if (string.IsNullOrWhiteSpace(className)) className = "GeneratedClass";
         if (string.IsNullOrWhiteSpace(namespaceName)) namespaceName = "Generated";
@@ -30,8 +30,6 @@ public class CppGenerator : CodeGeneratorBase
         sb.AppendLine("#include <string>");
         sb.AppendLine("#include <vector>");
         sb.AppendLine("#include <array>");
-        if (lookupKeyColumnIndex >= 0)
-            sb.AppendLine("#include <map>");
         sb.AppendLine();
         sb.AppendLine($"namespace {namespaceName}");
         sb.AppendLine("{");
@@ -46,15 +44,117 @@ public class CppGenerator : CodeGeneratorBase
 
         if (groupByColumnIndex >= 0 && groupByColumnIndex < data.Columns.Count)
             GenerateGroupedData(sb, data, className, groupByColumnIndex);
-        else if (lookupKeyColumnIndex >= 0 && lookupKeyColumnIndex < data.Columns.Count)
-            GenerateLookupData(sb, data, className, lookupKeyColumnIndex);
         else
             GenerateFlatData(sb, data, className);
 
-        GenerateUniqueArrays(sb, data);
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    public override string GenerateListCode(CsvFileData data, string variablePrefix, string namespaceName)
+    {
+        if (string.IsNullOrWhiteSpace(variablePrefix)) variablePrefix = "Data";
+        if (string.IsNullOrWhiteSpace(namespaceName)) namespaceName = "Generated";
+        variablePrefix = SanitizeIdentifier(variablePrefix);
+        namespaceName = SanitizeIdentifier(namespaceName);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("#pragma once");
+        sb.AppendLine("#include <string>");
+        sb.AppendLine("#include <vector>");
+        sb.AppendLine();
+        sb.AppendLine($"namespace {namespaceName}");
+        sb.AppendLine("{");
+
+        foreach (var column in data.Columns.Where(c => c.IsIncluded))
+        {
+            var propName = SanitizeIdentifier(column.PropertyName);
+            var typeName = column.CSharpType == "enum" ? GetEnumTypeName(column) : MapType(column.CSharpType);
+            var isArrayColumn = ColumnHasArrayValues(data, column);
+
+            if (isArrayColumn)
+            {
+                GenerateMatrixList(sb, data, column, propName, typeName);
+            }
+            else
+            {
+                GenerateFlatList(sb, data, column, propName, typeName);
+            }
+
+            sb.AppendLine();
+        }
 
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Düz liste üretir — hücrelerde array yoksa.
+    /// </summary>
+    private void GenerateFlatList(StringBuilder sb, CsvFileData data, CsvColumn column,
+        string propName, string typeName)
+    {
+        var rawValues = new List<string>();
+        foreach (var row in data.Rows)
+        {
+            var raw = column.ColumnIndex < row.Length ? row[column.ColumnIndex].Trim() : "";
+            rawValues.Add(raw);
+        }
+
+        if (column.IsUniqueList) rawValues = rawValues.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        var values = new List<string>();
+        foreach (var raw in rawValues)
+        {
+            if (column.CSharpType == "enum")
+                values.Add($"{GetEnumTypeName(column)}::{SanitizeEnumMember(raw)}");
+            else
+                values.Add(FormatValue(raw, column.CSharpType));
+        }
+
+        SortValues(values, column.ListSortOrder);
+
+        sb.AppendLine($"    inline const std::vector<{typeName}> {propName} = {{");
+        foreach (var val in values)
+            sb.AppendLine($"        {val},");
+        sb.AppendLine("    };");
+    }
+
+    /// <summary>
+    /// Matris (iç içe vector) üretir — hücrelerde array varsa.
+    /// </summary>
+    private void GenerateMatrixList(StringBuilder sb, CsvFileData data, CsvColumn column,
+        string propName, string typeName)
+    {
+        var allArrays = new List<List<string>>();
+        foreach (var row in data.Rows)
+        {
+            var raw = column.ColumnIndex < row.Length ? row[column.ColumnIndex].Trim() : "";
+            var elements = ParseArrayElements(raw);
+
+            if (column.IsUniqueList)
+                elements = elements.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            var formatted = new List<string>();
+            foreach (var elem in elements)
+            {
+                if (column.CSharpType == "enum")
+                    formatted.Add($"{GetEnumTypeName(column)}::{SanitizeEnumMember(elem)}");
+                else
+                    formatted.Add(FormatValue(elem, column.CSharpType));
+            }
+
+            SortValues(formatted, column.ListSortOrder);
+
+            allArrays.Add(formatted);
+        }
+
+        sb.AppendLine($"    inline const std::vector<std::vector<{typeName}>> {propName} = {{");
+        foreach (var arr in allArrays)
+        {
+            sb.AppendLine($"        {{{string.Join(", ", arr)}}},");
+        }
+        sb.AppendLine("    };");
     }
 
     public override string AppendToExistingFile(string existingContent, CsvFileData newData, string className)
@@ -147,9 +247,7 @@ public class CppGenerator : CodeGeneratorBase
                 {
                     var groupName = SanitizeIdentifier(column.GroupName);
                     var elementType = MapType(column.CSharpType);
-                    var memberType = column.CollectionType == GroupCollectionType.Array
-                        ? $"std::vector<{elementType}>"
-                        : $"std::vector<{elementType}>";
+                    var memberType = $"std::vector<{elementType}>";
                     sb.AppendLine($"        {memberType} {groupName};");
                 }
             }
@@ -184,53 +282,6 @@ public class CppGenerator : CodeGeneratorBase
         }
 
         sb.AppendLine("    };");
-    }
-
-    private void GenerateLookupData(StringBuilder sb, CsvFileData data, string className, int lookupKeyColumnIndex)
-    {
-        var keyColumn = data.Columns[lookupKeyColumnIndex];
-        var keyType = keyColumn.CSharpType == "enum" ? GetEnumTypeName(keyColumn) : MapType(keyColumn.CSharpType);
-        var groups = BuildGroups(data, lookupKeyColumnIndex);
-        var propName = SanitizeIdentifier(keyColumn.PropertyName);
-
-        sb.AppendLine($"    inline const std::map<{keyType}, std::vector<{className}>> ItemsBy{propName} = {{");
-        for (int gi = 0; gi < groups.Count; gi++)
-        {
-            var group = groups[gi];
-            var keyLiteral = keyColumn.CSharpType == "enum"
-                ? $"{keyType}::{SanitizeEnumMember(group.Key)}"
-                : FormatValue(group.Key, keyColumn.CSharpType);
-
-            sb.AppendLine($"        {{{keyLiteral}, {{");
-            for (int ri = 0; ri < group.Rows.Count; ri++)
-                GenerateStructInitializer(sb, data, group.Rows[ri], className, "            ", ri < group.Rows.Count - 1);
-            sb.AppendLine($"        }}}}{(gi < groups.Count - 1 ? "," : "")}");
-        }
-        sb.AppendLine("    };");
-        sb.AppendLine();
-    }
-
-    private void GenerateUniqueArrays(StringBuilder sb, CsvFileData data)
-    {
-        var uniqueColumns = data.Columns.Where(c => c.IsUnique && c.IsIncluded).ToList();
-        if (uniqueColumns.Count == 0) return;
-
-        sb.AppendLine();
-        foreach (var column in uniqueColumns)
-        {
-            var propName = SanitizeIdentifier(column.PropertyName);
-            var typeName = column.CSharpType == "enum" ? GetEnumTypeName(column) : MapType(column.CSharpType);
-            var uniqueValues = GetUniqueColumnValues(data, column.ColumnIndex);
-
-            var formatted = uniqueValues.Select(v =>
-                column.CSharpType == "enum"
-                    ? $"{typeName}::{SanitizeEnumMember(v)}"
-                    : FormatValue(v, column.CSharpType)
-            );
-
-            sb.AppendLine($"    inline const std::vector<{typeName}> Unique{propName} = {{ {string.Join(", ", formatted)} }};");
-        }
-        sb.AppendLine();
     }
 
     private void GenerateStructInitializer(StringBuilder sb, CsvFileData data, string[] row, string className, string indent, bool trailing)

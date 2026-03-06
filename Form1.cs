@@ -7,6 +7,7 @@ namespace Csv2Code
     {
         private readonly List<CsvFileData> _loadedFiles = new();
         private CsvFileData? _selectedFile;
+        private GenerationMode _currentMode = GenerationMode.Object;
 
         public Form1()
         {
@@ -30,8 +31,11 @@ namespace Csv2Code
             dgvColumns.CellValueChanged += DgvColumns_CellValueChanged;
             dgvColumns.CurrentCellDirtyStateChanged += DgvColumns_CurrentCellDirtyStateChanged;
             dgvColumns.SelectionChanged += DgvColumns_SelectionChanged;
+            dgvListColumns.CellValueChanged += DgvListColumns_CellValueChanged;
+            dgvListColumns.CurrentCellDirtyStateChanged += DgvListColumns_CurrentCellDirtyStateChanged;
             txtEnumName.TextChanged += TxtEnumName_TextChanged;
             cmbLanguage.SelectedIndexChanged += CmbLanguage_SelectedIndexChanged;
+            tabMode.SelectedIndexChanged += TabMode_SelectedIndexChanged;
         }
 
         #endregion
@@ -52,6 +56,7 @@ namespace Csv2Code
             {
                 _selectedFile = null;
                 dgvColumns.Rows.Clear();
+                dgvListColumns.Rows.Clear();
                 dgvDataPreview.Columns.Clear();
                 dgvDataPreview.Rows.Clear();
                 rtbCodePreview.Clear();
@@ -173,8 +178,9 @@ namespace Csv2Code
             // Group By dropdown'unu doldur
             PopulateGroupByDropdown(data);
 
-            // Kolon ayarlarını yükle
+            // Kolon ayarlarını yükle (her iki mod için)
             LoadColumnsGrid(data);
+            LoadListColumnsGrid(data);
 
             // Veri önizlemesini yükle
             LoadDataPreview(data);
@@ -188,17 +194,12 @@ namespace Csv2Code
             cmbGroupBy.Items.Clear();
             cmbGroupBy.Items.Add("(Gruplama Yok)");
 
-            cmbLookupKey.Items.Clear();
-            cmbLookupKey.Items.Add("(Lookup Yok)");
-
             foreach (var col in data.Columns)
             {
                 if (!col.IsIncluded) continue;
                 cmbGroupBy.Items.Add(col.OriginalName);
-                cmbLookupKey.Items.Add(col.OriginalName);
             }
             cmbGroupBy.SelectedIndex = 0;
-            cmbLookupKey.SelectedIndex = 0;
         }
 
         private void LoadColumnsGrid(CsvFileData data)
@@ -216,10 +217,28 @@ namespace Csv2Code
                 row.Cells["colCSharpType"].Value = column.CSharpType;
                 row.Cells["colGroupName"].Value = column.GroupName;
                 row.Cells["colCollectionType"].Value = column.CollectionType.ToString();
-                row.Cells["colUnique"].Value = column.IsUnique;
             }
 
             pnlEnumSettings.Visible = false;
+        }
+
+        private void LoadListColumnsGrid(CsvFileData data)
+        {
+            dgvListColumns.Rows.Clear();
+
+            foreach (var column in data.Columns)
+            {
+                var rowIndex = dgvListColumns.Rows.Add();
+                var row = dgvListColumns.Rows[rowIndex];
+
+                row.Cells["colListInclude"].Value = column.IsIncluded;
+                row.Cells["colListOriginalName"].Value = column.OriginalName;
+                row.Cells["colListVarName"].Value = column.PropertyName;
+                row.Cells["colListType"].Value = column.CSharpType;
+                row.Cells["colListCollectionType"].Value = column.ListCollectionType == GroupCollectionType.Array ? "Array" : "List";
+                row.Cells["colListUnique"].Value = column.IsUniqueList;
+                row.Cells["colListSortOrder"].Value = column.ListSortOrder.ToString();
+            }
         }
 
         /// <summary>
@@ -292,7 +311,89 @@ namespace Csv2Code
 
         #endregion
 
-        #region Column Settings
+        #region Tab Mode
+
+        private void TabMode_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            var bgDark = Color.FromArgb(30, 30, 46);
+            var bgPanel = Color.FromArgb(40, 40, 60);
+            var bgInactive = Color.FromArgb(45, 45, 65);
+            var accentBlue = Color.FromArgb(100, 140, 255);
+            var accentPurple = Color.FromArgb(160, 120, 255);
+            var textLight = Color.FromArgb(230, 230, 245);
+            var textMuted = Color.FromArgb(140, 140, 170);
+
+            var tabPage = tabMode.TabPages[e.Index];
+            var bounds = tabMode.GetTabRect(e.Index);
+            bool isSelected = tabMode.SelectedIndex == e.Index;
+
+            // İç margin — tab'lar arası boşluk efekti
+            const int hMargin = 3;
+            const int topMargin = 3;
+            var innerBounds = new Rectangle(
+                bounds.Left + hMargin,
+                bounds.Top + topMargin,
+                bounds.Width - hMargin * 2,
+                bounds.Height - topMargin
+            );
+
+            // Tab arka planı (iç alan)
+            var tabBgColor = isSelected ? bgDark : bgInactive;
+            using var bgBrush = new SolidBrush(tabBgColor);
+            e.Graphics.FillRectangle(bgBrush, innerBounds);
+
+            // Seçili tab — alt tarafına gradient accent bar
+            if (isSelected)
+            {
+                var accentRect = new Rectangle(innerBounds.Left, innerBounds.Bottom - 3, innerBounds.Width, 3);
+                using var gradientBrush = new System.Drawing.Drawing2D.LinearGradientBrush(
+                    accentRect, accentBlue, accentPurple,
+                    System.Drawing.Drawing2D.LinearGradientMode.Horizontal);
+                e.Graphics.FillRectangle(gradientBrush, accentRect);
+            }
+            else
+            {
+                // Seçili olmayan tab — üstüne hafif border
+                using var borderPen = new Pen(Color.FromArgb(55, 55, 80), 1);
+                e.Graphics.DrawRectangle(borderPen, innerBounds);
+            }
+
+            // Tab metni
+            var textColor = isSelected ? textLight : textMuted;
+            using var textBrush = new SolidBrush(textColor);
+            var textFont = isSelected
+                ? new Font("Segoe UI", 10F, FontStyle.Bold)
+                : new Font("Segoe UI", 9.5F, FontStyle.Regular);
+            var textFormat = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center
+            };
+            e.Graphics.DrawString(tabPage.Text, textFont, textBrush, innerBounds, textFormat);
+            textFont.Dispose();
+        }
+
+        private void TabMode_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            _currentMode = tabMode.SelectedIndex == 0 ? GenerationMode.Object : GenerationMode.List;
+
+            // Mod'a göre label güncelle
+            lblClassName.Text = _currentMode == GenerationMode.Object ? "Sınıf Adı:" : "Değişken Prefix:";
+
+            // GroupBy sadece Object modda görünsün
+            cmbGroupBy.Visible = _currentMode == GenerationMode.Object;
+            lblGroupBy.Visible = _currentMode == GenerationMode.Object;
+
+            // Tüm tab başlıklarının yeniden çizilmesini sağla
+            tabMode.Invalidate();
+
+            // Kod önizlemesini temizle
+            rtbCodePreview.Clear();
+        }
+
+        #endregion
+
+        #region Column Settings — Obje Modu
 
         private void DgvColumns_CurrentCellDirtyStateChanged(object? sender, EventArgs e)
         {
@@ -367,10 +468,66 @@ namespace Csv2Code
                     _ => GroupCollectionType.None
                 };
             }
-            else if (e.ColumnIndex == dgvColumns.Columns["colUnique"]!.Index)
+        }
+
+        #endregion
+
+        #region Column Settings — Liste Modu
+
+        private void DgvListColumns_CurrentCellDirtyStateChanged(object? sender, EventArgs e)
+        {
+            if (dgvListColumns.IsCurrentCellDirty)
             {
-                var isUnique = row.Cells["colUnique"].Value;
-                column.IsUnique = isUnique is true;
+                dgvListColumns.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            }
+        }
+
+        private void DgvListColumns_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (_selectedFile == null || e.RowIndex < 0 || e.RowIndex >= _selectedFile.Columns.Count)
+                return;
+
+            var column = _selectedFile.Columns[e.RowIndex];
+            var row = dgvListColumns.Rows[e.RowIndex];
+
+            if (e.ColumnIndex == dgvListColumns.Columns["colListInclude"]!.Index)
+            {
+                column.IsIncluded = row.Cells["colListInclude"].Value is true;
+            }
+            else if (e.ColumnIndex == dgvListColumns.Columns["colListVarName"]!.Index)
+            {
+                var newName = row.Cells["colListVarName"].Value?.ToString();
+                if (!string.IsNullOrWhiteSpace(newName))
+                    column.PropertyName = newName;
+            }
+            else if (e.ColumnIndex == dgvListColumns.Columns["colListType"]!.Index)
+            {
+                var newType = row.Cells["colListType"].Value?.ToString();
+                if (!string.IsNullOrWhiteSpace(newType))
+                    column.CSharpType = newType;
+            }
+            else if (e.ColumnIndex == dgvListColumns.Columns["colListCollectionType"]!.Index)
+            {
+                var colType = row.Cells["colListCollectionType"].Value?.ToString() ?? "List";
+                column.ListCollectionType = colType switch
+                {
+                    "Array" => GroupCollectionType.Array,
+                    _ => GroupCollectionType.List
+                };
+            }
+            else if (e.ColumnIndex == dgvListColumns.Columns["colListUnique"]!.Index)
+            {
+                column.IsUniqueList = row.Cells["colListUnique"].Value is true;
+            }
+            else if (e.ColumnIndex == dgvListColumns.Columns["colListSortOrder"]!.Index)
+            {
+                var sortStr = row.Cells["colListSortOrder"].Value?.ToString() ?? "None";
+                column.ListSortOrder = sortStr switch
+                {
+                    "Ascending" => Models.SortOrder.Ascending,
+                    "Descending" => Models.SortOrder.Descending,
+                    _ => Models.SortOrder.None
+                };
             }
         }
 
@@ -387,17 +544,30 @@ namespace Csv2Code
             }
 
             SyncColumnsFromGrid();
-            var groupByIndex = GetGroupByColumnIndex();
-            var lookupKeyIndex = GetLookupKeyColumnIndex();
             var lang = GetSelectedLanguage();
-            var code = CodeGeneratorService.GenerateCode(
-                _selectedFile,
-                txtClassName.Text,
-                txtNamespace.Text,
-                groupByIndex,
-                lang,
-                lookupKeyIndex
-            );
+            string code;
+
+            if (_currentMode == GenerationMode.Object)
+            {
+                var groupByIndex = GetGroupByColumnIndex();
+                code = CodeGeneratorService.GenerateCode(
+                    _selectedFile,
+                    txtClassName.Text,
+                    txtNamespace.Text,
+                    groupByIndex,
+                    lang
+                );
+            }
+            else
+            {
+                SyncListColumnsFromGrid();
+                code = CodeGeneratorService.GenerateListCode(
+                    _selectedFile,
+                    txtClassName.Text,
+                    txtNamespace.Text,
+                    lang
+                );
+            }
 
             ApplySyntaxHighlighting(code);
             UpdateStatus("Kod önizlemesi oluşturuldu.");
@@ -450,16 +620,29 @@ namespace Csv2Code
             try
             {
                 SyncColumnsFromGrid();
-                var groupByIndex = GetGroupByColumnIndex();
-                var lookupKeyIndex = GetLookupKeyColumnIndex();
-                var code = CodeGeneratorService.GenerateCode(
-                    _selectedFile,
-                    txtClassName.Text,
-                    txtNamespace.Text,
-                    groupByIndex,
-                    lang,
-                    lookupKeyIndex
-                );
+                string code;
+
+                if (_currentMode == GenerationMode.Object)
+                {
+                    var groupByIndex = GetGroupByColumnIndex();
+                    code = CodeGeneratorService.GenerateCode(
+                        _selectedFile,
+                        txtClassName.Text,
+                        txtNamespace.Text,
+                        groupByIndex,
+                        lang
+                    );
+                }
+                else
+                {
+                    SyncListColumnsFromGrid();
+                    code = CodeGeneratorService.GenerateListCode(
+                        _selectedFile,
+                        txtClassName.Text,
+                        txtNamespace.Text,
+                        lang
+                    );
+                }
 
                 File.WriteAllText(exportPath, code, System.Text.Encoding.UTF8);
                 ApplySyntaxHighlighting(code);
@@ -541,7 +724,7 @@ namespace Csv2Code
         }
 
         /// <summary>
-        /// Grid'deki değişiklikleri model'e senkronize eder.
+        /// Grid'deki değişiklikleri model'e senkronize eder (Obje Modu).
         /// </summary>
         private void SyncColumnsFromGrid()
         {
@@ -573,9 +756,47 @@ namespace Csv2Code
                     "Array" => GroupCollectionType.Array,
                     _ => GroupCollectionType.None
                 };
+            }
+        }
 
-                var isUnique = row.Cells["colUnique"].Value;
-                column.IsUnique = isUnique is true;
+        /// <summary>
+        /// Grid'deki değişiklikleri model'e senkronize eder (Liste Modu).
+        /// </summary>
+        private void SyncListColumnsFromGrid()
+        {
+            if (_selectedFile == null) return;
+
+            for (int i = 0; i < dgvListColumns.Rows.Count && i < _selectedFile.Columns.Count; i++)
+            {
+                var row = dgvListColumns.Rows[i];
+                var column = _selectedFile.Columns[i];
+
+                column.IsIncluded = row.Cells["colListInclude"].Value is true;
+
+                var varName = row.Cells["colListVarName"].Value?.ToString();
+                if (!string.IsNullOrWhiteSpace(varName))
+                    column.PropertyName = varName;
+
+                var listType = row.Cells["colListType"].Value?.ToString();
+                if (!string.IsNullOrWhiteSpace(listType))
+                    column.CSharpType = listType;
+
+                var colTypeStr = row.Cells["colListCollectionType"].Value?.ToString() ?? "List";
+                column.ListCollectionType = colTypeStr switch
+                {
+                    "Array" => GroupCollectionType.Array,
+                    _ => GroupCollectionType.List
+                };
+
+                column.IsUniqueList = row.Cells["colListUnique"].Value is true;
+
+                var sortStr = row.Cells["colListSortOrder"].Value?.ToString() ?? "None";
+                column.ListSortOrder = sortStr switch
+                {
+                    "Ascending" => Models.SortOrder.Ascending,
+                    "Descending" => Models.SortOrder.Descending,
+                    _ => Models.SortOrder.None
+                };
             }
         }
 
@@ -589,17 +810,6 @@ namespace Csv2Code
 
             // İlk item "(Gruplama Yok)" olduğu için index - 1
             return cmbGroupBy.SelectedIndex - 1;
-        }
-
-        /// <summary>
-        /// Lookup Key dropdown'ından seçilen kolonun index'ini döndürür. -1 = lookup yok.
-        /// </summary>
-        private int GetLookupKeyColumnIndex()
-        {
-            if (_selectedFile == null || cmbLookupKey.SelectedIndex <= 0)
-                return -1;
-
-            return cmbLookupKey.SelectedIndex - 1;
         }
 
         /// <summary>
@@ -634,6 +844,14 @@ namespace Csv2Code
                     typeCol.Items.Add(t);
             }
 
+            // dgvListColumns'daki colListType ComboBox sütununu güncelle
+            if (dgvListColumns.Columns["colListType"] is DataGridViewComboBoxColumn listTypeCol)
+            {
+                listTypeCol.Items.Clear();
+                foreach (var t in types)
+                    listTypeCol.Items.Add(t);
+            }
+
             // Mevcut satırlardaki seçili tipi kontrol et — eğer yeni dilde yoksa string/varsayılan yap
             for (int i = 0; i < dgvColumns.Rows.Count; i++)
             {
@@ -642,6 +860,16 @@ namespace Csv2Code
                 if (!types.Contains(currentType))
                 {
                     cell.Value = types[0]; // ilk tip (string/str/String/...)
+                }
+            }
+
+            for (int i = 0; i < dgvListColumns.Rows.Count; i++)
+            {
+                var cell = dgvListColumns.Rows[i].Cells["colListType"];
+                var currentType = cell.Value?.ToString() ?? "";
+                if (!types.Contains(currentType))
+                {
+                    cell.Value = types[0];
                 }
             }
 
@@ -859,5 +1087,29 @@ namespace Csv2Code
         }
 
         #endregion
+    }
+
+    /// <summary>
+    /// Dark tema uyumlu TabControl — arka planı otomatik koyu renkle boyar.
+    /// </summary>
+    internal class DarkTabControl : TabControl
+    {
+        private static readonly Color BgPanel = Color.FromArgb(40, 40, 60);
+        private static readonly Color SeparatorColor = Color.FromArgb(55, 55, 80);
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            using var brush = new SolidBrush(BgPanel);
+            e.Graphics.FillRectangle(brush, ClientRectangle);
+
+            // Tab header altına ince bir ayırıcı çizgi
+            if (TabCount > 0)
+            {
+                var tabRect = GetTabRect(0);
+                var separatorY = tabRect.Bottom;
+                using var pen = new Pen(SeparatorColor, 1);
+                e.Graphics.DrawLine(pen, 0, separatorY, Width, separatorY);
+            }
+        }
     }
 }

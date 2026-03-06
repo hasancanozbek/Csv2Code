@@ -37,14 +37,24 @@ public class CsvColumn
     public GroupCollectionType CollectionType { get; set; } = GroupCollectionType.None;
 
     /// <summary>
-    /// Bu kolon için unique değer dizisi üretilsin mi?
-    /// </summary>
-    public bool IsUnique { get; set; }
-
-    /// <summary>
     /// Bu kolon kod üretimine dahil mi? (false ise atlanır)
     /// </summary>
     public bool IsIncluded { get; set; } = true;
+
+    /// <summary>
+    /// Liste modunda: sadece benzersiz değerler üretilsin mi?
+    /// </summary>
+    public bool IsUniqueList { get; set; }
+
+    /// <summary>
+    /// Liste modunda: sıralama yönü.
+    /// </summary>
+    public SortOrder ListSortOrder { get; set; } = SortOrder.None;
+
+    /// <summary>
+    /// Liste modunda: koleksiyon tipi (List veya Array).
+    /// </summary>
+    public GroupCollectionType ListCollectionType { get; set; } = GroupCollectionType.List;
 
     /// <summary>
     /// Kullanıcının belirlediği enum tipi adı.

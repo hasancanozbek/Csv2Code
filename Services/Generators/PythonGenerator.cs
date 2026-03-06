@@ -16,7 +16,7 @@ public class PythonGenerator : CodeGeneratorBase
     public override string FileExtension => ".py";
     public override string LanguageName => "Python";
 
-    public override string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1, int lookupKeyColumnIndex = -1)
+    public override string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1)
     {
         if (string.IsNullOrWhiteSpace(className)) className = "GeneratedClass";
         className = SanitizeIdentifier(className);
@@ -38,14 +38,109 @@ public class PythonGenerator : CodeGeneratorBase
 
         if (groupByColumnIndex >= 0 && groupByColumnIndex < data.Columns.Count)
             GenerateGroupedData(sb, data, className, groupByColumnIndex);
-        else if (lookupKeyColumnIndex >= 0 && lookupKeyColumnIndex < data.Columns.Count)
-            GenerateLookupData(sb, data, className, lookupKeyColumnIndex);
         else
             GenerateFlatData(sb, data, className);
 
-        GenerateUniqueLists(sb, data);
+        return sb.ToString();
+    }
+
+    public override string GenerateListCode(CsvFileData data, string variablePrefix, string namespaceName)
+    {
+        if (string.IsNullOrWhiteSpace(variablePrefix)) variablePrefix = "data";
+        var prefix = ToSnakeCase(variablePrefix);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("from typing import List");
+        sb.AppendLine();
+
+        foreach (var column in data.Columns.Where(c => c.IsIncluded))
+        {
+            var propName = ToSnakeCase(column.PropertyName);
+            var typeName = column.CSharpType == "enum" ? GetEnumTypeName(column) : MapType(column.CSharpType);
+            var isArrayColumn = ColumnHasArrayValues(data, column);
+
+            if (isArrayColumn)
+            {
+                GenerateMatrixList(sb, data, column, prefix, propName, typeName);
+            }
+            else
+            {
+                GenerateFlatList(sb, data, column, prefix, propName, typeName);
+            }
+        }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// Düz liste üretir — hücrelerde array yoksa.
+    /// </summary>
+    private void GenerateFlatList(StringBuilder sb, CsvFileData data, CsvColumn column,
+        string prefix, string propName, string typeName)
+    {
+        var rawValues = new List<string>();
+        foreach (var row in data.Rows)
+        {
+            var raw = column.ColumnIndex < row.Length ? row[column.ColumnIndex].Trim() : "";
+            rawValues.Add(raw);
+        }
+
+        if (column.IsUniqueList) rawValues = rawValues.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        var values = new List<string>();
+        foreach (var raw in rawValues)
+        {
+            if (column.CSharpType == "enum")
+                values.Add($"{GetEnumTypeName(column)}.{SanitizeEnumMember(raw)}");
+            else
+                values.Add(FormatValue(raw, column.CSharpType));
+        }
+
+        SortValues(values, column.ListSortOrder);
+
+        sb.AppendLine($"{prefix}_{propName}: List[{typeName}] = [");
+        foreach (var val in values)
+            sb.AppendLine($"    {val},");
+        sb.AppendLine("]");
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// Matris (iç içe liste) üretir — hücrelerde array varsa.
+    /// </summary>
+    private void GenerateMatrixList(StringBuilder sb, CsvFileData data, CsvColumn column,
+        string prefix, string propName, string typeName)
+    {
+        var allArrays = new List<List<string>>();
+        foreach (var row in data.Rows)
+        {
+            var raw = column.ColumnIndex < row.Length ? row[column.ColumnIndex].Trim() : "";
+            var elements = ParseArrayElements(raw);
+
+            if (column.IsUniqueList)
+                elements = elements.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+            var formatted = new List<string>();
+            foreach (var elem in elements)
+            {
+                if (column.CSharpType == "enum")
+                    formatted.Add($"{GetEnumTypeName(column)}.{SanitizeEnumMember(elem)}");
+                else
+                    formatted.Add(FormatValue(elem, column.CSharpType));
+            }
+
+            SortValues(formatted, column.ListSortOrder);
+
+            allArrays.Add(formatted);
+        }
+
+        sb.AppendLine($"{prefix}_{propName}: List[List[{typeName}]] = [");
+        foreach (var arr in allArrays)
+        {
+            sb.AppendLine($"    [{string.Join(", ", arr)}],");
+        }
+        sb.AppendLine("]");
+        sb.AppendLine();
     }
 
     public override string AppendToExistingFile(string existingContent, CsvFileData newData, string className)
@@ -53,7 +148,6 @@ public class PythonGenerator : CodeGeneratorBase
         className = SanitizeIdentifier(className);
         var lines = existingContent.Split('\n').ToList();
 
-        // Items listesinin kapanışını bul: son "]" satırı
         int insertIndex = -1;
         for (int i = lines.Count - 1; i >= 0; i--)
         {
@@ -68,7 +162,6 @@ public class PythonGenerator : CodeGeneratorBase
         if (insertIndex < 0)
             throw new InvalidOperationException("Mevcut dosyada Items listesinin kapanışı (']') bulunamadı.");
 
-        // Son elemanın sonuna virgül ekle
         for (int i = insertIndex - 1; i >= 0; i--)
         {
             var trimmed = lines[i].TrimEnd('\r').TrimEnd();
@@ -175,52 +268,6 @@ public class PythonGenerator : CodeGeneratorBase
         }
 
         sb.AppendLine("]");
-    }
-
-    private void GenerateLookupData(StringBuilder sb, CsvFileData data, string className, int lookupKeyColumnIndex)
-    {
-        var keyColumn = data.Columns[lookupKeyColumnIndex];
-        var keyType = keyColumn.CSharpType == "enum" ? GetEnumTypeName(keyColumn) : MapType(keyColumn.CSharpType);
-        var groups = BuildGroups(data, lookupKeyColumnIndex);
-        var propName = ToSnakeCase(keyColumn.PropertyName);
-
-        sb.AppendLine($"items_by_{propName}: Dict[{keyType}, List[{className}]] = {{");
-        for (int gi = 0; gi < groups.Count; gi++)
-        {
-            var group = groups[gi];
-            var keyLiteral = keyColumn.CSharpType == "enum"
-                ? $"{GetEnumTypeName(keyColumn)}.{SanitizeEnumMember(group.Key)}"
-                : FormatValue(group.Key, keyColumn.CSharpType);
-
-            sb.AppendLine($"    {keyLiteral}: [");
-            for (int ri = 0; ri < group.Rows.Count; ri++)
-                GenerateObjectCreation(sb, data, group.Rows[ri], className, "        ", ri < group.Rows.Count - 1);
-            sb.AppendLine($"    ]{(gi < groups.Count - 1 ? "," : "")}");
-        }
-        sb.AppendLine("}");
-        sb.AppendLine();
-    }
-
-    private void GenerateUniqueLists(StringBuilder sb, CsvFileData data)
-    {
-        var uniqueColumns = data.Columns.Where(c => c.IsUnique && c.IsIncluded).ToList();
-        if (uniqueColumns.Count == 0) return;
-
-        sb.AppendLine();
-        foreach (var column in uniqueColumns)
-        {
-            var propName = ToSnakeCase(column.PropertyName);
-            var uniqueValues = GetUniqueColumnValues(data, column.ColumnIndex);
-
-            var formatted = uniqueValues.Select(v =>
-                column.CSharpType == "enum"
-                    ? $"{GetEnumTypeName(column)}.{SanitizeEnumMember(v)}"
-                    : FormatValue(v, column.CSharpType)
-            );
-
-            sb.AppendLine($"unique_{propName} = [{string.Join(", ", formatted)}]");
-        }
-        sb.AppendLine();
     }
 
     private void GenerateObjectCreation(StringBuilder sb, CsvFileData data, string[] row, string className, string indent, bool trailing)
