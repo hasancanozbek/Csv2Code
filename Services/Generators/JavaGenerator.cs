@@ -19,6 +19,9 @@ public class JavaGenerator : CodeGeneratorBase
     public override string FileExtension => ".java";
     public override string LanguageName => "Java";
 
+    /// <summary>
+    /// Obje modu: CSV verilerini Java class, constructor ve static ArrayList olarak üretir.
+    /// </summary>
     public override string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1)
     {
         if (string.IsNullOrWhiteSpace(className)) className = "GeneratedClass";
@@ -52,6 +55,9 @@ public class JavaGenerator : CodeGeneratorBase
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Liste modu: Her dahil edilen kolonu ayrı bir static ArrayList/array alanı olarak üretir.
+    /// </summary>
     public override string GenerateListCode(CsvFileData data, string variablePrefix, string namespaceName)
     {
         if (string.IsNullOrWhiteSpace(variablePrefix)) variablePrefix = "Data";
@@ -184,6 +190,9 @@ public class JavaGenerator : CodeGeneratorBase
         }
     }
 
+    /// <summary>
+    /// Mevcut Java dosyasındaki Items listesinin kapanışından önce yeni nesneleri ekler.
+    /// </summary>
     public override string AppendToExistingFile(string existingContent, CsvFileData newData, string className)
     {
         className = SanitizeIdentifier(className);
@@ -225,6 +234,9 @@ public class JavaGenerator : CodeGeneratorBase
 
     #region Enum
 
+    /// <summary>
+    /// Dahil edilen enum kolonları için Java enum tanımlarını üretir.
+    /// </summary>
     private void GenerateEnumDefinitions(StringBuilder sb, CsvFileData data, string outerClassName)
     {
         var enumColumns = data.Columns.Where(c => c.CSharpType == "enum" && c.IsStandalone && c.IsIncluded && IsDefaultEnumName(c)).ToList();
@@ -252,6 +264,9 @@ public class JavaGenerator : CodeGeneratorBase
 
     #region Fields & Constructor
 
+    /// <summary>
+    /// Dahil edilen kolonlar için Java public alan (field) tanımlarını üretir.
+    /// </summary>
     private void GenerateFields(StringBuilder sb, CsvFileData data)
     {
         var processedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -280,6 +295,9 @@ public class JavaGenerator : CodeGeneratorBase
         }
     }
 
+    /// <summary>
+    /// Tüm dahil edilen alanları parametre alan Java constructor tanımını üretir.
+    /// </summary>
     private void GenerateConstructor(StringBuilder sb, CsvFileData data, string className)
     {
         var processedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -325,6 +343,9 @@ public class JavaGenerator : CodeGeneratorBase
 
     #region Data
 
+    /// <summary>
+    /// Gruplama olmadan tüm satırları tek bir static final ArrayList olarak üretir.
+    /// </summary>
     private void GenerateFlatData(StringBuilder sb, CsvFileData data, string className)
     {
         sb.AppendLine($"    public static final List<{className}> Items = new ArrayList<>(Arrays.asList(");
@@ -333,6 +354,9 @@ public class JavaGenerator : CodeGeneratorBase
         sb.AppendLine("    ));");
     }
 
+    /// <summary>
+    /// Satırları belirtilen kolona göre gruplar ve her grubu iç ArrayList olarak üretir.
+    /// </summary>
     private void GenerateGroupedData(StringBuilder sb, CsvFileData data, string className, int groupByColumnIndex)
     {
         var groups = BuildGroups(data, groupByColumnIndex);
@@ -350,6 +374,9 @@ public class JavaGenerator : CodeGeneratorBase
         sb.AppendLine("    ));");
     }
 
+    /// <summary>
+    /// Tek bir satır için Java nesne oluşturma (constructor çağrısı) sözdizimini üretir.
+    /// </summary>
     private void GenerateObjectCreation(StringBuilder sb, CsvFileData data, string[] row, string className, string indent, bool trailing)
     {
         var processedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -399,6 +426,9 @@ public class JavaGenerator : CodeGeneratorBase
 
     #region Helpers
 
+    /// <summary>
+    /// C# tip adını karşılık gelen Java primitive tip adına eşler.
+    /// </summary>
     private static string MapType(string csharpType) => csharpType switch
     {
         "string" or "String" => "String",
@@ -414,6 +444,9 @@ public class JavaGenerator : CodeGeneratorBase
         _ => "String"
     };
 
+    /// <summary>
+    /// C# tip adını Java wrapper (boxed) tip adına eşler; generic koleksiyonlarda kullanılır.
+    /// </summary>
     private static string MapBoxedType(string csharpType) => csharpType switch
     {
         "string" or "String" => "String",
@@ -428,6 +461,9 @@ public class JavaGenerator : CodeGeneratorBase
         _ => "String"
     };
 
+    /// <summary>
+    /// Ham string değeri Java tip kurallarına uygun kod literaline dönüştürür.
+    /// </summary>
     private static string FormatValue(string rawValue, string csharpType)
     {
         var trimmed = rawValue.Trim();
@@ -458,6 +494,9 @@ public class JavaGenerator : CodeGeneratorBase
         };
     }
 
+    /// <summary>
+    /// PascalCase ismi Java camelCase formatına dönüştürür; ilk harfi küçük yapar.
+    /// </summary>
     private static string ToCamelCase(string name)
     {
         var sanitized = SanitizeIdentifier(name);
@@ -465,6 +504,9 @@ public class JavaGenerator : CodeGeneratorBase
         return char.ToLower(sanitized[0]) + sanitized[1..];
     }
 
+    /// <summary>
+    /// Satırları groupByColumnIndex'teki değere göre sıralı gruplar halinde döndürür.
+    /// </summary>
     private static List<(string Key, List<string[]> Rows)> BuildGroups(CsvFileData data, int groupByColumnIndex)
     {
         var groups = new List<(string Key, List<string[]> Rows)>();
