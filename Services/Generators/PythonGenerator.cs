@@ -16,6 +16,9 @@ public class PythonGenerator : CodeGeneratorBase
     public override string FileExtension => ".py";
     public override string LanguageName => "Python";
 
+    /// <summary>
+    /// Obje modu: CSV verilerini Python @dataclass ve global Items listesi olarak üretir.
+    /// </summary>
     public override string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1)
     {
         if (string.IsNullOrWhiteSpace(className)) className = "GeneratedClass";
@@ -44,6 +47,9 @@ public class PythonGenerator : CodeGeneratorBase
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Liste modu: Her dahil edilen kolonu ayrı bir Python List değişkeni olarak üretir.
+    /// </summary>
     public override string GenerateListCode(CsvFileData data, string variablePrefix, string namespaceName)
     {
         if (string.IsNullOrWhiteSpace(variablePrefix)) variablePrefix = "data";
@@ -143,6 +149,9 @@ public class PythonGenerator : CodeGeneratorBase
         sb.AppendLine();
     }
 
+    /// <summary>
+    /// Mevcut Python dosyasındaki Items listesinin kapanış köşeli parantezinden önce yeni nesneleri ekler.
+    /// </summary>
     public override string AppendToExistingFile(string existingContent, CsvFileData newData, string className)
     {
         className = SanitizeIdentifier(className);
@@ -186,6 +195,9 @@ public class PythonGenerator : CodeGeneratorBase
 
     #region Enum
 
+    /// <summary>
+    /// Dahil edilen enum kolonları için Python Enum alt sınıf tanımlarını üretir.
+    /// </summary>
     private void GenerateEnumDefinitions(StringBuilder sb, CsvFileData data)
     {
         var enumColumns = data.Columns.Where(c => c.CSharpType == "enum" && c.IsStandalone && c.IsIncluded && IsDefaultEnumName(c)).ToList();
@@ -214,6 +226,9 @@ public class PythonGenerator : CodeGeneratorBase
 
     #region Fields
 
+    /// <summary>
+    /// Dahil edilen kolonlar için Python dataclass alan (field) tanımlarını üretir.
+    /// </summary>
     private void GenerateFields(StringBuilder sb, CsvFileData data)
     {
         var processedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -244,6 +259,9 @@ public class PythonGenerator : CodeGeneratorBase
 
     #region Data
 
+    /// <summary>
+    /// Gruplama olmadan tüm satırları tek bir global Python listesi olarak üretir.
+    /// </summary>
     private void GenerateFlatData(StringBuilder sb, CsvFileData data, string className)
     {
         sb.AppendLine($"Items: List[{className}] = [");
@@ -252,6 +270,9 @@ public class PythonGenerator : CodeGeneratorBase
         sb.AppendLine("]");
     }
 
+    /// <summary>
+    /// Satırları belirtilen kolona göre gruplar ve her grubu iç liste olarak üretir.
+    /// </summary>
     private void GenerateGroupedData(StringBuilder sb, CsvFileData data, string className, int groupByColumnIndex)
     {
         sb.AppendLine($"GroupedItems: List[List[{className}]] = [");
@@ -270,6 +291,9 @@ public class PythonGenerator : CodeGeneratorBase
         sb.AppendLine("]");
     }
 
+    /// <summary>
+    /// Tek bir satır için Python dataclass constructor çağrısını üretir.
+    /// </summary>
     private void GenerateObjectCreation(StringBuilder sb, CsvFileData data, string[] row, string className, string indent, bool trailing)
     {
         var processedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -317,6 +341,9 @@ public class PythonGenerator : CodeGeneratorBase
 
     #region Helpers
 
+    /// <summary>
+    /// C# tip adını karşılık gelen Python tip adına eşler.
+    /// </summary>
     private static string MapType(string csharpType) => csharpType switch
     {
         "string" or "str" => "str",
@@ -328,6 +355,9 @@ public class PythonGenerator : CodeGeneratorBase
         _ => "str"
     };
 
+    /// <summary>
+    /// Ham string değeri Python tip kurallarına uygun kod literaline dönüştürür.
+    /// </summary>
     private static string FormatValue(string rawValue, string csharpType)
     {
         var trimmed = rawValue.Trim();
@@ -355,6 +385,9 @@ public class PythonGenerator : CodeGeneratorBase
         };
     }
 
+    /// <summary>
+    /// PascalCase veya camelCase ismi Python snake_case formatına dönüştürür.
+    /// </summary>
     private static string ToSnakeCase(string name)
     {
         var sanitized = SanitizeIdentifier(name);
@@ -371,6 +404,9 @@ public class PythonGenerator : CodeGeneratorBase
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Satırları groupByColumnIndex'teki değere göre sıralı gruplar halinde döndürür.
+    /// </summary>
     private static List<(string Key, List<string[]> Rows)> BuildGroups(CsvFileData data, int groupByColumnIndex)
     {
         var groups = new List<(string Key, List<string[]> Rows)>();

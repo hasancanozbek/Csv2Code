@@ -18,6 +18,9 @@ public class CGenerator : CodeGeneratorBase
     public override string FileExtension => ".h";
     public override string LanguageName => "C";
 
+    /// <summary>
+    /// Obje modu: CSV verilerini C typedef struct + statik array olarak header-only dosyada üretir.
+    /// </summary>
     public override string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1)
     {
         if (string.IsNullOrWhiteSpace(className)) className = "GeneratedData";
@@ -47,6 +50,9 @@ public class CGenerator : CodeGeneratorBase
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Liste modu: Her dahil edilen kolonu static const array olarak üretir.
+    /// </summary>
     public override string GenerateListCode(CsvFileData data, string variablePrefix, string namespaceName)
     {
         if (string.IsNullOrWhiteSpace(variablePrefix)) variablePrefix = "Data";
@@ -160,6 +166,9 @@ public class CGenerator : CodeGeneratorBase
         sb.AppendLine();
     }
 
+    /// <summary>
+    /// Mevcut C header dosyasındaki static array kapanışından önce yeni struct initializer'ları ekler.
+    /// </summary>
     public override string AppendToExistingFile(string existingContent, CsvFileData newData, string className)
     {
         className = SanitizeIdentifier(className);
@@ -201,6 +210,9 @@ public class CGenerator : CodeGeneratorBase
 
     #region Enum
 
+    /// <summary>
+    /// Dahil edilen enum kolonları için C typedef enum tanımlarını üretir.
+    /// </summary>
     private void GenerateEnumDefinitions(StringBuilder sb, CsvFileData data)
     {
         var enumColumns = data.Columns.Where(c => c.CSharpType == "enum" && c.IsStandalone && c.IsIncluded && IsDefaultEnumName(c)).ToList();
@@ -231,6 +243,9 @@ public class CGenerator : CodeGeneratorBase
 
     #region Members
 
+    /// <summary>
+    /// Dahil edilen kolonlar için C struct üye değişken tanımlarını üretir.
+    /// </summary>
     private void GenerateMembers(StringBuilder sb, CsvFileData data)
     {
         var processedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -260,6 +275,9 @@ public class CGenerator : CodeGeneratorBase
 
     #region Data
 
+    /// <summary>
+    /// Gruplama olmadan tüm satırları tek bir static const array olarak üretir.
+    /// </summary>
     private void GenerateFlatData(StringBuilder sb, CsvFileData data, string className)
     {
         sb.AppendLine($"static const int {className}_count = {data.Rows.Count};");
@@ -270,6 +288,9 @@ public class CGenerator : CodeGeneratorBase
         sb.AppendLine();
     }
 
+    /// <summary>
+    /// Satırları belirtilen kolona göre gruplar; her grup için ayrı static const array üretir.
+    /// </summary>
     private void GenerateGroupedData(StringBuilder sb, CsvFileData data, string className, int groupByColumnIndex)
     {
         var groups = BuildGroups(data, groupByColumnIndex);
@@ -288,6 +309,9 @@ public class CGenerator : CodeGeneratorBase
         }
     }
 
+    /// <summary>
+    /// Tek bir satır için C struct initializer sözdizimini üretir.
+    /// </summary>
     private void GenerateStructInit(StringBuilder sb, CsvFileData data, string[] row, string indent, bool trailing)
     {
         var processedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -333,6 +357,9 @@ public class CGenerator : CodeGeneratorBase
 
     #region Helpers
 
+    /// <summary>
+    /// C# tip adını karşılık gelen C tip adına eşler.
+    /// </summary>
     private static string MapType(string csharpType) => csharpType switch
     {
         "string" or "const char*" => "const char*",
@@ -348,6 +375,9 @@ public class CGenerator : CodeGeneratorBase
         _ => "const char*"
     };
 
+    /// <summary>
+    /// Ham string değeri C tip kurallarına uygun kod literaline dönüştürür.
+    /// </summary>
     private static string FormatValue(string rawValue, string csharpType)
     {
         var trimmed = rawValue.Trim();
@@ -375,6 +405,9 @@ public class CGenerator : CodeGeneratorBase
         };
     }
 
+    /// <summary>
+    /// Satırları groupByColumnIndex'teki değere göre sıralı gruplar halinde döndürür.
+    /// </summary>
     private static List<(string Key, List<string[]> Rows)> BuildGroups(CsvFileData data, int groupByColumnIndex)
     {
         var groups = new List<(string Key, List<string[]> Rows)>();

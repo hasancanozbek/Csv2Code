@@ -18,6 +18,9 @@ public class CppGenerator : CodeGeneratorBase
     public override string FileExtension => ".h";
     public override string LanguageName => "C++";
 
+    /// <summary>
+    /// Obje modu: CSV verilerini C++ struct + inline vector olarak header-only dosyada üretir.
+    /// </summary>
     public override string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1)
     {
         if (string.IsNullOrWhiteSpace(className)) className = "GeneratedClass";
@@ -51,6 +54,9 @@ public class CppGenerator : CodeGeneratorBase
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Liste modu: Her dahil edilen kolonu inline const std::vector olarak üretir.
+    /// </summary>
     public override string GenerateListCode(CsvFileData data, string variablePrefix, string namespaceName)
     {
         if (string.IsNullOrWhiteSpace(variablePrefix)) variablePrefix = "Data";
@@ -157,6 +163,9 @@ public class CppGenerator : CodeGeneratorBase
         sb.AppendLine("    };");
     }
 
+    /// <summary>
+    /// Mevcut C++ header dosyasındaki data vector kapanışından önce yeni struct initializer'ları ekler.
+    /// </summary>
     public override string AppendToExistingFile(string existingContent, CsvFileData newData, string className)
     {
         className = SanitizeIdentifier(className);
@@ -198,6 +207,9 @@ public class CppGenerator : CodeGeneratorBase
 
     #region Enum
 
+    /// <summary>
+    /// Dahil edilen enum kolonları için C++ enum class tanımlarını üretir.
+    /// </summary>
     private void GenerateEnumDefinitions(StringBuilder sb, CsvFileData data)
     {
         var enumColumns = data.Columns.Where(c => c.CSharpType == "enum" && c.IsStandalone && c.IsIncluded && IsDefaultEnumName(c)).ToList();
@@ -229,6 +241,9 @@ public class CppGenerator : CodeGeneratorBase
 
     #region Members
 
+    /// <summary>
+    /// Dahil edilen kolonlar için C++ struct üye değişken tanımlarını üretir.
+    /// </summary>
     private void GenerateMembers(StringBuilder sb, CsvFileData data)
     {
         var processedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -258,6 +273,9 @@ public class CppGenerator : CodeGeneratorBase
 
     #region Data
 
+    /// <summary>
+    /// Gruplama olmadan tüm satırları tek bir inline const std::vector olarak üretir.
+    /// </summary>
     private void GenerateFlatData(StringBuilder sb, CsvFileData data, string className)
     {
         sb.AppendLine($"    inline const std::vector<{className}> Items = {{");
@@ -266,6 +284,9 @@ public class CppGenerator : CodeGeneratorBase
         sb.AppendLine("    };");
     }
 
+    /// <summary>
+    /// Satırları belirtilen kolona göre gruplar ve her grubu iç vector olarak üretir.
+    /// </summary>
     private void GenerateGroupedData(StringBuilder sb, CsvFileData data, string className, int groupByColumnIndex)
     {
         sb.AppendLine($"    inline const std::vector<std::vector<{className}>> GroupedItems = {{");
@@ -284,6 +305,9 @@ public class CppGenerator : CodeGeneratorBase
         sb.AppendLine("    };");
     }
 
+    /// <summary>
+    /// Tek bir satır için C++ aggregate initialization sözdizimini üretir.
+    /// </summary>
     private void GenerateStructInitializer(StringBuilder sb, CsvFileData data, string[] row, string className, string indent, bool trailing)
     {
         sb.AppendLine($"{indent}{className}{{");
@@ -333,6 +357,9 @@ public class CppGenerator : CodeGeneratorBase
 
     #region Helpers
 
+    /// <summary>
+    /// C# tip adını karşılık gelen C++ tip adına eşler.
+    /// </summary>
     private static string MapType(string csharpType) => csharpType switch
     {
         "string" or "std::string" => "std::string",
@@ -349,6 +376,9 @@ public class CppGenerator : CodeGeneratorBase
         _ => "std::string"
     };
 
+    /// <summary>
+    /// Ham string değeri C++ tip kurallarına uygun kod literaline dönüştürür.
+    /// </summary>
     private static string FormatValue(string rawValue, string csharpType)
     {
         var trimmed = rawValue.Trim();
@@ -378,6 +408,9 @@ public class CppGenerator : CodeGeneratorBase
         };
     }
 
+    /// <summary>
+    /// Satırları groupByColumnIndex'teki değere göre sıralı gruplar halinde döndürür.
+    /// </summary>
     private static List<(string Key, List<string[]> Rows)> BuildGroups(CsvFileData data, int groupByColumnIndex)
     {
         var groups = new List<(string Key, List<string[]> Rows)>();

@@ -9,6 +9,9 @@ namespace Csv2Code
         private CsvFileData? _selectedFile;
         private GenerationMode _currentMode = GenerationMode.Object;
 
+        /// <summary>
+        /// Form1 constructor: bileşenleri başlatır ve event handler'ları bağlar.
+        /// </summary>
         public Form1()
         {
             InitializeComponent();
@@ -17,6 +20,9 @@ namespace Csv2Code
 
         #region Event Wiring
 
+        /// <summary>
+        /// Tüm UI bileşenlerinin event handler'larını bağlar.
+        /// </summary>
         private void WireEvents()
         {
             btnImportFile.Click += BtnImportFile_Click;
@@ -42,6 +48,9 @@ namespace Csv2Code
 
         #region File Management
 
+        /// <summary>
+        /// Seçili dosyayı listeden ve yüklü dosyalardan kaldırır; UI'ı temizler.
+        /// </summary>
         private void BtnRemoveFile_Click(object? sender, EventArgs e)
         {
             if (lstFiles.SelectedIndex < 0) return;
@@ -76,6 +85,9 @@ namespace Csv2Code
 
         #region Import
 
+        /// <summary>
+        /// Dosya seçme diyaloğunu açar ve seçilen CSV dosyalarını yükler.
+        /// </summary>
         private void BtnImportFile_Click(object? sender, EventArgs e)
         {
             using var dialog = new OpenFileDialog
@@ -94,6 +106,9 @@ namespace Csv2Code
             }
         }
 
+        /// <summary>
+        /// Klasör seçme diyaloğunu açar ve seçilen klasördeki tüm CSV dosyalarını yükler.
+        /// </summary>
         private void BtnImportFolder_Click(object? sender, EventArgs e)
         {
             using var dialog = new FolderBrowserDialog
@@ -121,6 +136,10 @@ namespace Csv2Code
             }
         }
 
+        /// <summary>
+        /// Tek bir CSV dosyasını parse edip yüklü dosyalar listesine ekler.
+        /// Aynı dosya zaten yüklüyse işlemi atlar.
+        /// </summary>
         private void ImportSingleFile(string filePath)
         {
             try
@@ -142,6 +161,9 @@ namespace Csv2Code
             }
         }
 
+        /// <summary>
+        /// Parse edilmiş CSV verisini yüklü dosyalar listesine ve lstFiles kontrolüne ekler.
+        /// </summary>
         private void AddFileToList(CsvFileData data)
         {
             // Aynı dosya zaten yüklü mü kontrol et
@@ -161,6 +183,9 @@ namespace Csv2Code
 
         #region File Selection
 
+        /// <summary>
+        /// lstFiles'ta seçim değiştiğinde ilgili dosyayı aktif dosya olarak ayarlar ve UI'ı günceller.
+        /// </summary>
         private void LstFiles_SelectedIndexChanged(object? sender, EventArgs e)
         {
             if (lstFiles.SelectedIndex < 0 || lstFiles.SelectedIndex >= _loadedFiles.Count)
@@ -170,6 +195,9 @@ namespace Csv2Code
             LoadFileToUI(_selectedFile);
         }
 
+        /// <summary>
+        /// Seçili CSV dosyasının verilerini tüm grid ve kontrollere yükler.
+        /// </summary>
         private void LoadFileToUI(CsvFileData data)
         {
             // Class adını dosya adından oluştur
@@ -189,6 +217,9 @@ namespace Csv2Code
             rtbCodePreview.Clear();
         }
 
+        /// <summary>
+        /// cmbGroupBy dropdown'unu aktif dosyanın dahil edilen kolonlarıyla doldurur.
+        /// </summary>
         private void PopulateGroupByDropdown(CsvFileData data)
         {
             cmbGroupBy.Items.Clear();
@@ -202,6 +233,9 @@ namespace Csv2Code
             cmbGroupBy.SelectedIndex = 0;
         }
 
+        /// <summary>
+        /// Obje modu kolon ayarları grid'ini (dgvColumns) dosyanın kolonlarıyla doldurur.
+        /// </summary>
         private void LoadColumnsGrid(CsvFileData data)
         {
             dgvColumns.Rows.Clear();
@@ -222,6 +256,9 @@ namespace Csv2Code
             pnlEnumSettings.Visible = false;
         }
 
+        /// <summary>
+        /// Liste modu kolon ayarları grid'ini (dgvListColumns) dosyanın kolonlarıyla doldurur.
+        /// </summary>
         private void LoadListColumnsGrid(CsvFileData data)
         {
             dgvListColumns.Rows.Clear();
@@ -290,6 +327,9 @@ namespace Csv2Code
                 column.EnumName = txtEnumName.Text;
         }
 
+        /// <summary>
+        /// dgvDataPreview grid'ini doldurar; ilk 100 satırı önizleme olarak gösterir.
+        /// </summary>
         private void LoadDataPreview(CsvFileData data)
         {
             dgvDataPreview.Columns.Clear();
@@ -313,6 +353,9 @@ namespace Csv2Code
 
         #region Tab Mode
 
+        /// <summary>
+        /// tabMode sekmelerini dark tema uyumlu özel renk ve gradient ile çizer.
+        /// </summary>
         private void TabMode_DrawItem(object? sender, DrawItemEventArgs e)
         {
             var bgDark = Color.FromArgb(30, 30, 46);
@@ -373,6 +416,9 @@ namespace Csv2Code
             textFont.Dispose();
         }
 
+        /// <summary>
+        /// Sekme değiştiğinde üretim modunu (Object/List) günceller ve ilgili UI elemanlarını gösterir/gizler.
+        /// </summary>
         private void TabMode_SelectedIndexChanged(object? sender, EventArgs e)
         {
             _currentMode = tabMode.SelectedIndex == 0 ? GenerationMode.Object : GenerationMode.List;
@@ -395,6 +441,9 @@ namespace Csv2Code
 
         #region Column Settings — Obje Modu
 
+        /// <summary>
+        /// dgvColumns'ta ComboBox değişikliklerinin anında model'e yansıması için dirty state commit eder.
+        /// </summary>
         private void DgvColumns_CurrentCellDirtyStateChanged(object? sender, EventArgs e)
         {
             // ComboBox değişikliklerinin anında uygulanması için
@@ -404,6 +453,9 @@ namespace Csv2Code
             }
         }
 
+        /// <summary>
+        /// dgvColumns'ta bir hücre değiştiğinde ilgili CsvColumn modelini günceller.
+        /// </summary>
         private void DgvColumns_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
         {
             if (_selectedFile == null || e.RowIndex < 0 || e.RowIndex >= _selectedFile.Columns.Count)
@@ -474,6 +526,9 @@ namespace Csv2Code
 
         #region Column Settings — Liste Modu
 
+        /// <summary>
+        /// dgvListColumns'ta ComboBox değişikliklerinin anında model'e yansıması için dirty state commit eder.
+        /// </summary>
         private void DgvListColumns_CurrentCellDirtyStateChanged(object? sender, EventArgs e)
         {
             if (dgvListColumns.IsCurrentCellDirty)
@@ -482,6 +537,9 @@ namespace Csv2Code
             }
         }
 
+        /// <summary>
+        /// dgvListColumns'ta bir hücre değiştiğinde ilgili CsvColumn modelini günceller.
+        /// </summary>
         private void DgvListColumns_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
         {
             if (_selectedFile == null || e.RowIndex < 0 || e.RowIndex >= _selectedFile.Columns.Count)
@@ -535,6 +593,9 @@ namespace Csv2Code
 
         #region Code Generation
 
+        /// <summary>
+        /// Seçili dosya ve ayarlarla kod üretir; sonucu syntax highlighting ile rtbCodePreview'da gösterir.
+        /// </summary>
         private void BtnPreview_Click(object? sender, EventArgs e)
         {
             if (_selectedFile == null)
@@ -573,6 +634,9 @@ namespace Csv2Code
             UpdateStatus("Kod önizlemesi oluşturuldu.");
         }
 
+        /// <summary>
+        /// Üretilen kodu hedef dosya yoluna kaydeder; yol belirtilmemişse SaveFileDialog açar.
+        /// </summary>
         private void BtnSave_Click(object? sender, EventArgs e)
         {
             if (_selectedFile == null)
@@ -661,6 +725,9 @@ namespace Csv2Code
             }
         }
 
+        /// <summary>
+        /// Önizleme alanındaki kodu panoya kopyalar.
+        /// </summary>
         private void BtnCopyCode_Click(object? sender, EventArgs e)
         {
             if (string.IsNullOrWhiteSpace(rtbCodePreview.Text))
@@ -673,6 +740,9 @@ namespace Csv2Code
             UpdateStatus("📋 Kod panoya kopyalandı.");
         }
 
+        /// <summary>
+        /// Mevcut bir kod dosyasını seçer ve seçili CSV'nin verilerini o dosyaya ekler.
+        /// </summary>
         private void BtnAppendToFile_Click(object? sender, EventArgs e)
         {
             if (_selectedFile == null)
@@ -881,6 +951,9 @@ namespace Csv2Code
 
         #region Export Path
 
+        /// <summary>
+        /// Klasör seçme diyaloğunu açar ve seçilen yolu txtExportPath'e yazar.
+        /// </summary>
         private void BtnBrowseExport_Click(object? sender, EventArgs e)
         {
             using var dialog = new FolderBrowserDialog
@@ -899,6 +972,9 @@ namespace Csv2Code
 
         #region Syntax Highlighting
 
+        /// <summary>
+        /// Üretilen kodu rtbCodePreview'a yükler ve dile özgü sözdizimi renklendirmesi uygular.
+        /// </summary>
         private void ApplySyntaxHighlighting(string code)
         {
             rtbCodePreview.SuspendLayout();
@@ -942,6 +1018,9 @@ namespace Csv2Code
             rtbCodePreview.ResumeLayout();
         }
 
+        /// <summary>
+        /// Belirtilen anahtar kelimeleri tam kelime eşleşmesiyle bulur ve verilen renge boyar.
+        /// </summary>
         private void HighlightWords(string[] words, Color color)
         {
             foreach (var word in words)
@@ -980,6 +1059,9 @@ namespace Csv2Code
             }
         }
 
+        /// <summary>
+        /// Başlangıç ve bitiş işaretleri arasındaki bloğu (örn. string literal) verilen renge boyar.
+        /// </summary>
         private void HighlightPattern(string text, string start, string end, Color color)
         {
             int index = 0;
@@ -999,6 +1081,9 @@ namespace Csv2Code
             }
         }
 
+        /// <summary>
+        /// Metindeki sayısal literalleri (rakam dizileri, ondalık ve tip suffix dahil) verilen renge boyar.
+        /// </summary>
         private void HighlightNumbers(string text, Color color)
         {
             for (int i = 0; i < text.Length; i++)
@@ -1022,6 +1107,9 @@ namespace Csv2Code
             }
         }
 
+        /// <summary>
+        /// Belirli bir prefix ile başlayan satırların tamamını verilen renge boyar.
+        /// </summary>
         private void HighlightLineStarting(string text, string prefix, Color color)
         {
             var lines = text.Split('\n');
@@ -1043,6 +1131,9 @@ namespace Csv2Code
 
         #region Helpers
 
+        /// <summary>
+        /// Dosya adını geçerli bir C# sınıf adına dönüştürür; geçersiz karakterleri kaldırır, baş harfi büyük yapar.
+        /// </summary>
         private static string SanitizeClassName(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
@@ -1071,16 +1162,25 @@ namespace Csv2Code
             return string.IsNullOrEmpty(result) ? "GeneratedClass" : result;
         }
 
+        /// <summary>
+        /// Durum çubuğundaki (tsslStatus) mesajı günceller.
+        /// </summary>
         private void UpdateStatus(string message)
         {
             tsslStatus.Text = message;
         }
 
+        /// <summary>
+        /// Hata ikonu ile bir MessageBox gösterir.
+        /// </summary>
         private static void ShowError(string title, string message)
         {
             MessageBox.Show(message, title, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
+        /// <summary>
+        /// Uyarı ikonu ile bir MessageBox gösterir.
+        /// </summary>
         private static void ShowWarning(string message)
         {
             MessageBox.Show(message, "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -1097,6 +1197,9 @@ namespace Csv2Code
         private static readonly Color BgPanel = Color.FromArgb(40, 40, 60);
         private static readonly Color SeparatorColor = Color.FromArgb(55, 55, 80);
 
+        /// <summary>
+        /// TabControl arka planını dark tema rengine boyar ve tab header altına ayırıcı çizgi ekler.
+        /// </summary>
         protected override void OnPaintBackground(PaintEventArgs e)
         {
             using var brush = new SolidBrush(BgPanel);

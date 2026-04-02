@@ -19,6 +19,10 @@ public class CSharpGenerator : CodeGeneratorBase
     public override string FileExtension => ".cs";
     public override string LanguageName => "C#";
 
+    /// <summary>
+    /// Obje modu: CSV verilerini C# class + statik liste olarak üretir.
+    /// groupByColumnIndex &gt;= 0 ise gruplu veri üretilir.
+    /// </summary>
     public override string GenerateCode(CsvFileData data, string className, string namespaceName, int groupByColumnIndex = -1)
     {
         if (string.IsNullOrWhiteSpace(className)) className = "GeneratedClass";
@@ -47,6 +51,9 @@ public class CSharpGenerator : CodeGeneratorBase
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Liste modu: Her dahil edilen kolonu ayrı bir static List/Array alanı olarak üretir.
+    /// </summary>
     public override string GenerateListCode(CsvFileData data, string variablePrefix, string namespaceName)
     {
         if (string.IsNullOrWhiteSpace(variablePrefix)) variablePrefix = "Data";
@@ -196,6 +203,9 @@ public class CSharpGenerator : CodeGeneratorBase
         }
     }
 
+    /// <summary>
+    /// Mevcut C# dosyasındaki statik liste kapanışından önce yeni nesneleri ekler.
+    /// </summary>
     public override string AppendToExistingFile(string existingContent, CsvFileData newData, string className)
     {
         className = SanitizeIdentifier(className);
@@ -240,6 +250,9 @@ public class CSharpGenerator : CodeGeneratorBase
 
     #region Enum
 
+    /// <summary>
+    /// Standalone ve default enum adına sahip tüm enum kolonları için C# enum tanımı üretir.
+    /// </summary>
     private void GenerateEnumDefinitions(StringBuilder sb, CsvFileData data)
     {
         var enumColumns = data.Columns.Where(c => c.CSharpType == "enum" && c.IsStandalone && c.IsIncluded && IsDefaultEnumName(c)).ToList();
@@ -271,6 +284,10 @@ public class CSharpGenerator : CodeGeneratorBase
 
     #region Properties
 
+    /// <summary>
+    /// Dahil edilen kolonlar için C# auto-property tanımlarını üretir.
+    /// Gruplanan kolonlar tek bir List/Array property olarak çıkar.
+    /// </summary>
     private void GenerateProperties(StringBuilder sb, CsvFileData data)
     {
         sb.AppendLine("        #region Properties");
@@ -306,6 +323,9 @@ public class CSharpGenerator : CodeGeneratorBase
 
     #region Data Generation
 
+    /// <summary>
+    /// Gruplama olmadan tüm satırları tek bir static List&lt;T&gt; olarak üretir.
+    /// </summary>
     private void GenerateFlatData(StringBuilder sb, CsvFileData data, string className)
     {
         sb.AppendLine("        #region Data");
@@ -319,6 +339,9 @@ public class CSharpGenerator : CodeGeneratorBase
         sb.AppendLine("        #endregion");
     }
 
+    /// <summary>
+    /// Belirtilen kolonun değerine göre satırları gruplar ve her grubu ayrı iç liste olarak üretir.
+    /// </summary>
     private void GenerateGroupedData(StringBuilder sb, CsvFileData data, string className, int groupByColumnIndex)
     {
         sb.AppendLine("        #region Data");
@@ -344,6 +367,9 @@ public class CSharpGenerator : CodeGeneratorBase
         sb.AppendLine("        #endregion");
     }
 
+    /// <summary>
+    /// Tek bir satır için C# nesne başlatıcı (object initializer) sözdizimini üretir.
+    /// </summary>
     private void GenerateObjectInitializer(StringBuilder sb, CsvFileData data, string[] row, string className, string indent, bool hasTrailingComma)
     {
         sb.AppendLine($"{indent}new {className}");
@@ -396,6 +422,9 @@ public class CSharpGenerator : CodeGeneratorBase
         sb.AppendLine($"{indent}}}{(hasTrailingComma ? "," : "")}");
     }
 
+    /// <summary>
+    /// Satırları groupByColumnIndex'teki değere göre sıralı gruplar halinde döndürür.
+    /// </summary>
     private static List<(string Key, List<string[]> Rows)> BuildGroups(CsvFileData data, int groupByColumnIndex)
     {
         var groups = new List<(string Key, List<string[]> Rows)>();
@@ -418,6 +447,9 @@ public class CSharpGenerator : CodeGeneratorBase
 
     #region Value Formatting
 
+    /// <summary>
+    /// Ham string değeri belirtilen C# tipine uygun kod literaline dönüştürür.
+    /// </summary>
     public static string FormatValue(string rawValue, string csharpType)
     {
         var trimmed = rawValue.Trim();
@@ -441,9 +473,15 @@ public class CSharpGenerator : CodeGeneratorBase
         };
     }
 
+    /// <summary>
+    /// Ondalık sayıyı normalize edip verilen suffix ile literal üretir (örn. "f", "d", "m").
+    /// </summary>
     private static string ConvertToDecimalLiteral(string value, string suffix)
         => $"{NormalizeDecimalSeparator(value)}{suffix}";
 
+    /// <summary>
+    /// Tam sayı literali üretir; ondalık kısmı atar ve suffix ekler (örn. "L" veya "").
+    /// </summary>
     private static string ConvertToNumericLiteral(string value, string suffix)
     {
         var normalized = NormalizeDecimalSeparator(value);
@@ -452,6 +490,9 @@ public class CSharpGenerator : CodeGeneratorBase
         return string.IsNullOrEmpty(suffix) ? normalized : $"{normalized}{suffix}";
     }
 
+    /// <summary>
+    /// Çeşitli truthy/falsy string ifadelerini C# bool literaline ("true"/"false") dönüştürür.
+    /// </summary>
     private static string ConvertToBoolLiteral(string value) => value.ToLowerInvariant() switch
     {
         "1" or "true" or "yes" or "evet" => "true",
@@ -459,6 +500,9 @@ public class CSharpGenerator : CodeGeneratorBase
         _ => "false"
     };
 
+    /// <summary>
+    /// Tek bir karakteri C# char literali için escape eder (örn. '\'' → "\\'").
+    /// </summary>
     private static string EscapeChar(char c) => c switch
     {
         '\\' => "\\\\", '\'' => "\\'", '\n' => "\\n", '\r' => "\\r", '\t' => "\\t", '\0' => "\\0",

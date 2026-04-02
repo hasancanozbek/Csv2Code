@@ -40,6 +40,10 @@ public abstract class CodeGeneratorBase
 
     #region Shared Utilities
 
+    /// <summary>
+    /// Verilen adı geçerli bir kod tanımlayıcısına dönüştürür.
+    /// Harf/rakam/_  dışındaki karakterleri atar; rakamla başlıyorsa başına _ ekler.
+    /// </summary>
     public static string SanitizeIdentifier(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -59,6 +63,10 @@ public abstract class CodeGeneratorBase
         return string.IsNullOrEmpty(result) ? "Item" : result;
     }
 
+    /// <summary>
+    /// Kolon için enum tip adını döndürür.
+    /// EnumName doluysa sanitize ederek kullanır; boşsa PropertyName + "Type" üretir.
+    /// </summary>
     public static string GetEnumTypeName(CsvColumn column)
     {
         if (!string.IsNullOrWhiteSpace(column.EnumName))
@@ -80,6 +88,10 @@ public abstract class CodeGeneratorBase
         return string.Equals(column.EnumName.Trim(), defaultName, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Bir değeri geçerli enum üye adına dönüştürür.
+    /// Boş değer → "None", rakamla başlayanlar → "Value_" önekiyle döner.
+    /// </summary>
     public static string SanitizeEnumMember(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -91,6 +103,9 @@ public abstract class CodeGeneratorBase
         return SanitizeIdentifier(value);
     }
 
+    /// <summary>
+    /// Belirtilen kolondaki benzersiz (büyük/küçük harf duyarsız), boş olmayan değerleri sırayla döndürür.
+    /// </summary>
     public static List<string> GetUniqueColumnValues(CsvFileData data, int columnIndex)
     {
         var values = new List<string>();
@@ -108,6 +123,9 @@ public abstract class CodeGeneratorBase
         return values;
     }
 
+    /// <summary>
+    /// Değerin boş, NA, N/A, NULL, NaN, nan veya "-" olup olmadığını kontrol eder.
+    /// </summary>
     public static bool IsNullOrNa(string value)
     {
         var trimmed = value.Trim();
@@ -121,6 +139,10 @@ public abstract class CodeGeneratorBase
                || trimmed == "";
     }
 
+    /// <summary>
+    /// Ondalık ayracını normalize eder: virgülü noktaya çevirir.
+    /// Hem nokta hem virgül varsa hangisinin ondalık hangisinin binlik ayraç olduğunu tespit eder.
+    /// </summary>
     public static string NormalizeDecimalSeparator(string value)
     {
         bool hasComma = value.Contains(',');
@@ -143,6 +165,9 @@ public abstract class CodeGeneratorBase
         return value;
     }
 
+    /// <summary>
+    /// Bir string değerindeki özel karakterleri escape eder: \, ", \n, \r, \t.
+    /// </summary>
     public static string EscapeString(string value)
     {
         return value
